@@ -1,0 +1,93 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SUDY ARCHITECTURE APP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400..700&family=Exo+2:ital,wght@0,100..900;1,100..900&family=Lora:ital,wght@0,400..700;1,400..700&family=Orbitron:wght@400..900&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.19.0",
+    "nanoid": "https://aistudiocdn.com/nanoid@^5.1.5"
+  }
+}
+</script>
+<style>
+    body {
+        font-family: 'Roboto', sans-serif;
+    }
+    .font-orbitron {
+        font-family: 'Orbitron', sans-serif;
+    }
+    .font-lora { font-family: 'Lora', serif; }
+    .font-dancing-script { font-family: 'Dancing Script', cursive; }
+    .font-exo-2 { font-family: 'Exo 2', sans-serif; }
+    /* Add smooth transitions for color changes */
+    * {
+        transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+    }
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+    /* Hide scrollbar for IE, Edge and Firefox */
+    .no-scrollbar {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+    }
+</style>
+<style>
+    /* Pink Theme Overrides */
+    .theme-pink.dark {
+        --bg-primary: #2E112D;
+        --bg-secondary: #4a2145;
+        --bg-tertiary: #67305e;
+        --bg-panel: rgba(74, 33, 69, 0.5);
+        --text-primary: #fce7f3;
+        --text-secondary: #fbcfe8;
+        --text-muted: #e8b3de;
+        --border-primary: #67305e;
+        --border-secondary: #843d7a;
+        --accent-primary: #db2777; /* pink-600 */
+        --accent-secondary: #be185d; /* pink-700 */
+        --accent-text: #fce7f3;
+    }
+    /* General overrides */
+    .theme-pink.dark body, .theme-pink.dark .dark\:bg-gray-900 { background-color: var(--bg-primary); }
+    .theme-pink.dark .dark\:bg-gray-800 { background-color: var(--bg-secondary); }
+    .theme-pink.dark .dark\:bg-gray-700 { background-color: var(--bg-tertiary); }
+    .theme-pink.dark .dark\:bg-gray-800\/50 { background-color: var(--bg-panel); }
+    .theme-pink.dark .dark\:bg-gray-900\/50 { background-color: rgba(46, 17, 45, 0.5); }
+    .theme-pink.dark .dark\:text-gray-200 { color: var(--text-primary); }
+    .theme-pink.dark .dark\:text-gray-300 { color: var(--text-secondary); }
+    .theme-pink.dark .dark\:text-gray-400, .theme-pink.dark .dark\:text-gray-500 { color: var(--text-muted); }
+    .theme-pink.dark .dark\:border-gray-700 { border-color: var(--border-primary); }
+    .theme-pink.dark .dark\:border-gray-600 { border-color: var(--border-secondary); }
+    /* Accent color overrides */
+    .theme-pink .bg-blue-600, .theme-pink .bg-indigo-600, .theme-pink .bg-teal-600 { background-color: var(--accent-primary); }
+    .theme-pink .hover\:bg-blue-700:hover, .theme-pink .hover\:bg-indigo-700:hover, .theme-pink .hover\:bg-teal-700:hover { background-color: var(--accent-secondary); }
+    .theme-pink .text-blue-600, .theme-pink .dark\:text-blue-400 { color: var(--accent-text); }
+    .theme-pink .border-blue-500 { border-color: var(--accent-primary); }
+    .theme-pink .dark\:bg-blue-500\/30 { background-color: rgba(219, 39, 119, 0.3); }
+    .theme-pink .text-blue-500 { color: var(--accent-primary); }
+    /* Specific components */
+    .theme-pink .from-red-500 { --tw-gradient-from: #ec4899; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgb(236 72 153 / 0)); }
+    .theme-pink .to-pink-500 { --tw-gradient-to: #d946ef; }
+    .theme-pink .bg-pink-500 { background-color: var(--accent-primary); }
+    .theme-pink .hover\:bg-pink-600:hover { background-color: var(--accent-secondary); }
+</style>
+</head>
+  <body class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
