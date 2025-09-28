@@ -29,21 +29,25 @@ const ToolCard: React.FC<{ tab: Tab; onClick: () => void; className?: string; TA
         >
             <div className="relative h-full w-full rounded-xl shadow-lg transition-all duration-500 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)]">
                 {/* Front */}
-                <div className="absolute inset-0 bg-gray-100 dark:bg-gray-800/80 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-xl p-6 flex flex-col items-center justify-center text-center [backface-visibility:hidden]">
-                    <div className="w-12 h-12 mb-4 text-blue-500 dark:text-blue-400">
+                <div className="absolute inset-0 bg-gray-100 dark:bg-gray-800/80 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-xl p-6 flex flex-col items-center text-center [backface-visibility:hidden]">
+                    <div className="flex-shrink-0 w-12 h-12 mb-4 text-blue-500 dark:text-blue-400">
                         {Icon}
                     </div>
-                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">{title}</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">{description}</p>
+                    <div className="min-h-0 flex-grow flex flex-col overflow-y-auto no-scrollbar w-full">
+                        <h3 className="font-bold text-lg text-gray-900 dark:text-white">{title}</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">{description}</p>
+                    </div>
                 </div>
                 {/* Back */}
                 <div className="absolute inset-0 h-full w-full rounded-xl bg-gray-800 dark:bg-gray-900 border border-gray-700 p-6 [transform:rotateY(180deg)] [backface-visibility:hidden]">
-                    <div className="text-center flex flex-col justify-center h-full">
-                        <h3 className="font-bold text-lg text-white">{title}</h3>
-                        <p className="text-sm font-semibold text-blue-400 mt-2 mb-3">{t('welcome.card.key_features')}</p>
-                        <ul className="text-xs text-gray-300 space-y-2 text-left list-disc list-inside">
-                           {features.map((feature, index) => <li key={index}>{feature}</li>)}
-                        </ul>
+                    <div className="text-center flex flex-col h-full">
+                        <h3 className="font-bold text-lg text-white flex-shrink-0">{title}</h3>
+                        <p className="text-sm font-semibold text-blue-400 mt-2 mb-3 flex-shrink-0">{t('welcome.card.key_features')}</p>
+                        <div className="min-h-0 flex-grow overflow-y-auto no-scrollbar text-left">
+                            <ul className="text-xs text-gray-300 space-y-2 list-disc list-inside">
+                               {features.map((feature, index) => <li key={index}>{feature}</li>)}
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
