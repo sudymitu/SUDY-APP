@@ -355,11 +355,12 @@ export const translations: Record<string, Record<string, string>> = {
     
     // API Key Modal
     'apiKey.title': 'Cài đặt',
-    'apiKey.customKeyDescription': 'Sử dụng API Key của riêng bạn để không bị giới hạn số lần sử dụng hàng ngày. Chìa khóa của bạn được lưu trữ cục bộ trong trình duyệt của bạn.',
+    'apiKey.customKeyDescription': 'Chìa khóa của bạn được lưu trữ an toàn trong trình duyệt. Để trống và lưu để quay lại sử dụng khóa mặc định.',
     'apiKey.inputLabel': 'API Key Google Gemini của bạn',
     'apiKey.placeholder': 'Dán API Key của bạn vào đây',
-    'apiKey.envFallbackDescription': 'Ứng dụng được cấu hình để sử dụng một API key được cung cấp sẵn. Bạn có thể điều chỉnh hạn mức sử dụng miễn phí bên dưới.',
-    'apiKey.button.save': 'Lưu',
+    'apiKey.envFallbackDescription': 'Các cài đặt bên dưới áp dụng khi bạn không sử dụng khóa API riêng của mình.',
+    'apiKey.button.save': 'Lưu Key',
+    'apiKey.button.saved': 'Đã lưu!',
 
     // Quota
     'quota.title': 'Hạn mức sử dụng',
@@ -832,11 +833,12 @@ export const translations: Record<string, Record<string, string>> = {
 
     // API Key Modal
     'apiKey.title': 'Settings',
-    'apiKey.customKeyDescription': 'Use your own API key to bypass daily usage limits. Your key is stored locally in your browser.',
+    'apiKey.customKeyDescription': 'Your key is stored securely in your browser. Leave blank and save to revert to the default key.',
     'apiKey.inputLabel': 'Your Google Gemini API Key',
     'apiKey.placeholder': 'Paste your API Key here',
-    'apiKey.envFallbackDescription': 'The application is configured to use a pre-provided API key. You can adjust the daily free usage limit below.',
-    'apiKey.button.save': 'Save',
+    'apiKey.envFallbackDescription': 'The settings below apply when you are not using your own API key.',
+    'apiKey.button.save': 'Save Key',
+    'apiKey.button.saved': 'Saved!',
     
     // Quota
     'quota.title': 'Usage Quota',
@@ -892,7 +894,7 @@ export const translations: Record<string, Record<string, string>> = {
     'activation.button': 'Activate',
     'activation.error': 'Invalid code. Please try again.',
     'activation.success': 'Successfully activated! All features are now unlocked.',
-
+    
     // Help Modal
     'helpModal.buttonTitle': 'Help Guide',
     'helpModal.title': 'Application Guide',
@@ -1309,11 +1311,12 @@ export const translations: Record<string, Record<string, string>> = {
 
     // API Key Modal
     'apiKey.title': '设置',
-    'apiKey.customKeyDescription': '使用您自己的API密钥以绕过每日使用限制。您的密钥存储在您的浏览器本地。',
-    'apiKey.inputLabel': '您的Google Gemini API密钥',
-    'apiKey.placeholder': '在此处粘贴您的API密钥',
-    'apiKey.envFallbackDescription': '应用程序已配置为使用预提供的API密钥。您可以在下面调整每日免费使用限制。',
-    'apiKey.button.save': '保存',
+    'apiKey.customKeyDescription': '您的密钥会安全地存储在您的浏览器中。留空并保存即可恢复使用默认密钥。',
+    'apiKey.inputLabel': '您的 Google Gemini API 密钥',
+    'apiKey.placeholder': '在此处粘贴您的 API 密钥',
+    'apiKey.envFallbackDescription': '以下设置在您不使用自己的 API 密钥时适用。',
+    'apiKey.button.save': '保存密钥',
+    'apiKey.button.saved': '已保存！',
     
     // Quota
     'quota.title': '使用配额',

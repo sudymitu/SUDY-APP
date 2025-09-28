@@ -1,4 +1,5 @@
 import React from 'react';
+import { AVATAR_BASE64 } from '../../assets/avatar';
 
 export const UploadIcon = ({ className }: { className?: string }) => (
   <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -212,6 +213,15 @@ export const CatLogoIcon = ({ className }: { className?: string }) => (
     <svg className={className} viewBox="0 0 100 100" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
         <path d="M50 2C23.5 2 2 23.5 2 50s21.5 48 48 48 48-21.5 48-48S76.5 2 50 2zm18 64c-3 0-5-2-5-5s2-5 5-5 5 2 5 5-2 5-5 5zm-36 0c-3 0-5-2-5-5s2-5 5-5 5 2 5 5-2 5-5 5zm28-18c-5 10-15 12-22 12s-17-2-22-12c-1-2 1-4 3-3 5 2 10 3 14 3h10c4 0 9-1 14-3 2-1 4 1 3 3z"/>
     </svg>
+);
+
+export const AvatarIcon = ({ className }: { className?: string }) => (
+    <div 
+        className={`bg-cover bg-center rounded-full ${className}`} 
+        style={{ backgroundImage: `url(${AVATAR_BASE64})` }}
+        role="img"
+        aria-label="App Avatar"
+    />
 );
 
 export const ChevronDoubleLeftIcon = ({ className }: { className?: string }) => (

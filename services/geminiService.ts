@@ -1,13 +1,14 @@
 import { GoogleGenAI, GenerateContentResponse, Modality, Type } from "@google/genai";
 
 const getAiClient = () => {
-    // FIX: Per coding guidelines, the API key must be obtained exclusively from the environment variable.
-    const apiKey = process.env.API_KEY;
+    // Prioritize user-provided API key from localStorage.
+    const userApiKey = localStorage.getItem('user_gemini_api_key');
+    const apiKey = userApiKey || process.env.API_KEY;
 
     if (!apiKey) {
         // This will prevent the app from making API calls without a key.
         // The error will be visible in the developer console.
-        throw new Error('CRITICAL: API key is missing. The API_KEY environment variable must be configured.');
+        throw new Error('CRITICAL: API key is missing. Please provide one in Settings or configure the API_KEY environment variable.');
     }
     // FIX: The GoogleGenAI constructor now requires the API key to be passed in an object with the `apiKey` property.
     return new GoogleGenAI({ apiKey });

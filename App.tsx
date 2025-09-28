@@ -32,7 +32,7 @@ import {
     LockClosedIcon,
     PaintBrushIcon,
     ViewfinderCircleIcon,
-    CatLogoIcon,
+    AvatarIcon,
     CubeIcon,
 } from './components/icons';
 import ApiQuotaDisplay from './components/ApiQuotaDisplay';
@@ -570,7 +570,7 @@ const App: React.FC = () => {
         {/* Sidebar */}
         <nav className={`flex flex-col flex-shrink-0 bg-gray-100 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 ease-in-out ${isSidebarExpanded ? 'w-64' : 'w-20'}`}>
             <div className="flex items-center justify-center h-16 border-b border-gray-200 dark:border-gray-700 px-2">
-                <CatLogoIcon className="w-10 h-10 text-gray-700 dark:text-gray-300 flex-shrink-0" />
+                <AvatarIcon className="w-10 h-10 flex-shrink-0" />
                 <h1 className={`text-sm font-bold text-gray-900 dark:text-white font-orbitron uppercase ml-2 transition-opacity duration-200 ${isSidebarExpanded ? 'opacity-100' : 'opacity-0'}`}>
                     {isSidebarExpanded ? t('appTitle') : ''}
                 </h1>

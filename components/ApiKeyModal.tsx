@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { XMarkIcon, KeyIcon } from './icons';
 import { useTranslation } from '../hooks/useTranslation';
 import { useApiQuota } from '../contexts/ApiQuotaContext';
@@ -11,6 +11,26 @@ interface ApiKeyModalProps {
 const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose }) => {
   const { t } = useTranslation();
   const { limit, setLimit } = useApiQuota();
+  const [apiKey, setApiKey] = useState('');
+  const [saveStatus, setSaveStatus] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      const storedKey = localStorage.getItem('user_gemini_api_key') || '';
+      setApiKey(storedKey);
+      setSaveStatus('');
+    }
+  }, [isOpen]);
+
+  const handleSaveKey = () => {
+    if (apiKey) {
+      localStorage.setItem('user_gemini_api_key', apiKey);
+    } else {
+      localStorage.removeItem('user_gemini_api_key');
+    }
+    setSaveStatus(t('apiKey.button.saved'));
+    setTimeout(() => setSaveStatus(''), 2000);
+  };
 
   if (!isOpen) return null;
 
@@ -30,20 +50,36 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose }) => {
           <XMarkIcon className="w-6 h-6" />
         </button>
         
-        <div className="flex items-center mb-4">
+        <div className="flex items-center mb-6">
             <KeyIcon className="w-8 h-8 text-blue-500 mr-3 flex-shrink-0" />
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t('apiKey.title')}</h2>
         </div>
         
-        {/* FIX: Removed API key input section to comply with new guidelines. */}
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            {t('apiKey.envFallbackDescription')}
-        </p>
+        <div className="space-y-2 mb-6">
+            <label htmlFor="api-key-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('apiKey.inputLabel')}</label>
+            <input
+                id="api-key-input"
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder={t('apiKey.placeholder')}
+                className="w-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+                {t('apiKey.customKeyDescription')}
+            </p>
+             <button
+                onClick={handleSaveKey}
+                className="w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-70"
+            >
+                {saveStatus || t('apiKey.button.save')}
+            </button>
+        </div>
 
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-6">
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">{t('quota.title')}</h3>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-            {t('apiKey.customKeyDescription')}
+            {t('apiKey.envFallbackDescription')}
           </p>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="quota-limit">
             {t('quota.dailyLimit')}
