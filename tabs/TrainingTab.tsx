@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import FileUpload from '../components/FileUpload';
 import { SparklesIcon, LoadingSpinner, DownloadIcon, FolderOpenIcon, TrashIcon, LockClosedIcon } from '../components/icons/index';
-import { ImageResult as ImageResultType, EnhanceState, Tab } from '../types';
+import { ImageResult as ImageResultType, EnhanceState, Tab, LoraFileContent } from '../types';
 import ImageResult from '../components/ImageResult';
-import { analyzeTrainingImages, generateImageFromImageAndText, getBase64FromResponse, generateImageFromText } from '../services/geminiService';
+import { analyzeTrainingImages, generateImageFromImageAndText, getBase64FromResponse, generateImageFromText, extractArchitecturalFeatures } from '../services/geminiService';
 import { nanoid } from 'nanoid';
 import { useTranslation } from '../hooks/useTranslation';
 import { useImageLibrary } from '../contexts/ImageLibraryContext';
@@ -31,7 +31,7 @@ const TrainingTab: React.FC<TrainingTabProps> = ({ initialState, state, setState
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const jsonInputRef = useRef<HTMLInputElement>(null);
+  const styleFileInputRef = useRef<HTMLInputElement>(null);
   const drawingCanvasRef = useRef<DrawingCanvasRef>(null);
   const { t } = useTranslation();
   const { addMedia } = useImageLibrary();
@@ -69,11 +69,25 @@ const TrainingTab: React.FC<TrainingTabProps> = ({ initialState, state, setState
     }
     setIsAnalyzing(true);
     setError(null);
+    setState({ ...state, analysisResult: '', featureImage: null }); // Clear previous results
 
     try {
       const imageDatas = await Promise.all(validImages.map(file => fileToBase64(file)));
-      const analysis = await analyzeTrainingImages(state.descriptionPrompt, imageDatas);
-      setState({ ...state, analysisResult: analysis });
+      
+      // Step 1: Analyze for text prompt
+      const analysisText = await analyzeTrainingImages(state.descriptionPrompt, imageDatas);
+      setState((prevState: any) => ({ ...prevState, analysisResult: analysisText }));
+      
+      // Step 2: Extract visual features
+      const featureResponse = await extractArchitecturalFeatures(imageDatas, state.featureType);
+      const featureImageB64 = getBase64FromResponse(featureResponse);
+
+      if (featureImageB64) {
+          setState((prevState: any) => ({ ...prevState, featureImage: `data:image/jpeg;base64,${featureImageB64}` }));
+      } else {
+          console.warn("Feature extraction did not return an image.");
+      }
+
     } catch (e) {
       console.error(e);
       if (e instanceof Error && e.message.toLowerCase().includes('quota')) {
@@ -216,29 +230,51 @@ const TrainingTab: React.FC<TrainingTabProps> = ({ initialState, state, setState
     }
   };
   
-  const handleSaveJson = () => {
-    if (!state.analysisResult) return;
-    const jsonContent = JSON.stringify({ trainedStylePrompt: state.analysisResult }, null, 2);
+  const handleSaveLora = async () => {
+    if (!state.analysisResult || !state.featureImage) {
+      setError("Please analyze a style and generate features before saving.");
+      return;
+    }
+    
+    const validImages = state.refImages.filter((f: File | null): f is File => f !== null);
+    if (validImages.length === 0) {
+      setError("At least one reference image is required to save a LORA file.");
+      return;
+    }
+
+    const refImageDatas = await Promise.all(validImages.map(async (file) => {
+        const { base64, mimeType } = await fileToBase64(file);
+        return { base64, mimeType, name: file.name };
+    }));
+
+    const loraContent: LoraFileContent = {
+        refImages: refImageDatas,
+        stylePrompt: state.analysisResult,
+        featureType: state.featureType,
+        featureImage: dataURLtoBase64(state.featureImage).base64,
+    };
+
+    const jsonContent = JSON.stringify(loraContent, null, 2);
     const blob = new Blob([jsonContent], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'trained_style.json';
+    link.download = 'trained_style.lora';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  const handleLoadJsonClick = () => {
+  const handleLoadStyleFileClick = () => {
     if (!isActivated) {
       openActivationModal();
     } else {
-      jsonInputRef.current?.click();
+      styleFileInputRef.current?.click();
     }
   };
 
-  const handleJsonFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleStyleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
         const reader = new FileReader();
@@ -246,7 +282,11 @@ const TrainingTab: React.FC<TrainingTabProps> = ({ initialState, state, setState
             try {
                 const content = event.target?.result as string;
                 const json = JSON.parse(content);
-                if (json.trainedStylePrompt && typeof json.trainedStylePrompt === 'string') {
+                // Check for new .lora format first, then fall back to old .json format
+                if (json.stylePrompt && typeof json.stylePrompt === 'string') {
+                    setState({ ...state, analysisResult: json.stylePrompt });
+                    setError(null);
+                } else if (json.trainedStylePrompt && typeof json.trainedStylePrompt === 'string') {
                     setState({ ...state, analysisResult: json.trainedStylePrompt });
                     setError(null);
                 } else {
@@ -303,6 +343,14 @@ const TrainingTab: React.FC<TrainingTabProps> = ({ initialState, state, setState
               </div>
             </div>
 
+             <div>
+                <h3 className="text-md font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('training.featureExtraction.title')}</h3>
+                <div className="flex bg-gray-200 dark:bg-gray-700/50 rounded-lg p-1 space-x-1">
+                     <button onClick={() => setState({...state, featureType: 'geometry'})} className={state.featureType === 'geometry' ? 'flex-1 py-1 bg-blue-600 text-white rounded-md text-xs' : 'flex-1 py-1 text-xs'}>{t('training.featureExtraction.geometry')}</button>
+                     <button onClick={() => setState({...state, featureType: 'material'})} className={state.featureType === 'material' ? 'flex-1 py-1 bg-blue-600 text-white rounded-md text-xs' : 'flex-1 py-1 text-xs'}>{t('training.featureExtraction.material')}</button>
+                </div>
+            </div>
+
             <button onClick={handleAnalyze} disabled={isAnalyzing || state.refImages.filter(Boolean).length === 0} className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-md hover:bg-indigo-700 disabled:bg-gray-500 transition-colors flex items-center justify-center space-x-2">
                 {isAnalyzing ? <LoadingSpinner className="w-5 h-5" /> : null}
                 <span>2. {t('training.button.analyze')}</span>
@@ -312,17 +360,26 @@ const TrainingTab: React.FC<TrainingTabProps> = ({ initialState, state, setState
                 <div className="bg-gray-200 dark:bg-gray-900/50 p-3 rounded-md space-y-2">
                     <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-300 mb-1">{t('training.analysisResult.title')}</h4>
                     <p className="text-xs text-gray-600 dark:text-gray-400 max-h-24 overflow-y-auto">{state.analysisResult}</p>
+                    {state.featureImage && (
+                        <div>
+                             <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-300 mt-2 mb-1">Extracted Features</h4>
+                            <img src={state.featureImage} alt="Extracted features" className="rounded-md w-full" />
+                        </div>
+                    )}
                     <div className="flex space-x-2 pt-2">
-                        <button onClick={handleSaveJson} className="w-full text-sm bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-white font-bold py-2 px-4 rounded-md hover:bg-gray-400 dark:hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2">
+                        <button onClick={handleSaveLora} className="w-full text-sm bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-white font-bold py-2 px-4 rounded-md hover:bg-gray-400 dark:hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2">
                             <DownloadIcon className="w-4 h-4" />
-                            <span>{t('training.button.saveJson')}</span>
+                            <span>{t('training.button.saveLora')}</span>
                         </button>
-                        <button onClick={handleLoadJsonClick} title={!isActivated ? t('tooltip.requiresActivation') : t('training.button.loadJson')} className={`w-full text-sm bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-white font-bold py-2 px-4 rounded-md hover:bg-gray-400 dark:hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2 ${!isActivated ? 'opacity-50 cursor-pointer' : ''}`}>
+                        <button onClick={handleLoadStyleFileClick} title={!isActivated ? t('tooltip.requiresActivation') : t('training.button.loadStyleFile')} className={`w-full text-sm bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-white font-bold py-2 px-4 rounded-md hover:bg-gray-400 dark:hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2 ${!isActivated ? 'opacity-50 cursor-pointer' : ''}`}>
                             <FolderOpenIcon className="w-4 h-4" />
-                            <span>{t('training.button.loadJson')}</span>
+                            <span>{t('training.button.loadStyleFile')}</span>
                             {!isActivated && <LockClosedIcon className="w-3 h-3 text-yellow-500 ml-1" />}
                         </button>
-                        <input type="file" accept=".json" ref={jsonInputRef} onChange={handleJsonFileChange} className="hidden" />
+                        <button onClick={() => setState({...state, analysisResult: '', featureImage: null})} className="p-2 bg-red-500/20 text-red-500 rounded-md hover:bg-red-500/40">
+                            <TrashIcon className="w-4 h-4" />
+                        </button>
+                        <input type="file" accept=".json,.lora" ref={styleFileInputRef} onChange={handleStyleFileChange} className="hidden" />
                     </div>
                 </div>
             )}

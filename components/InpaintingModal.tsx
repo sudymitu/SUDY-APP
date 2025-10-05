@@ -89,6 +89,7 @@ const InpaintingModal: React.FC<InpaintingModalProps> = ({ isOpen, onClose, onSa
   const [objects, setObjects] = useState<CanvasObject[]>([]);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [isMixing, setIsMixing] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
   
   // Zoom & Pan State
   const [zoom, setZoom] = useState(1);
@@ -153,6 +154,7 @@ const InpaintingModal: React.FC<InpaintingModalProps> = ({ isOpen, onClose, onSa
       setZoom(1);
       setPan({ x: 0, y: 0 });
       setCanvasSize({ width: 0, height: 0 }); // Reset size to force recalculation
+      setModalError(null);
       // Drawing history is now handled by initializeCanvases based on props
     }
   }, [isOpen, imageSrc]);
@@ -345,6 +347,7 @@ const InpaintingModal: React.FC<InpaintingModalProps> = ({ isOpen, onClose, onSa
     if (!asset || isMixing) return;
 
     setIsMixing(objectId);
+    setModalError(null);
     try {
         const compositeCanvas = document.createElement('canvas');
         const bgImg = backgroundRef.current;
@@ -384,10 +387,11 @@ const InpaintingModal: React.FC<InpaintingModalProps> = ({ isOpen, onClose, onSa
             setSelectedObjectId(null);
             onImageChange(newDataUrl); // This will cause the modal to re-render with the new image
         } else {
-            throw new Error("Magic Mix did not return an image.");
+            setModalError("Magic Mix failed to generate an image. The AI may have refused the request.");
         }
     } catch (err) {
         console.error("Magic Mix failed:", err);
+        setModalError(`An error occurred: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
         setIsMixing(null);
     }
@@ -902,6 +906,8 @@ const InpaintingModal: React.FC<InpaintingModalProps> = ({ isOpen, onClose, onSa
           </div>
         )}
       </div>
+
+      {modalError && <div className="absolute top-24 left-1/2 -translate-x-1/2 bg-red-600/90 text-white text-sm rounded-lg py-2 px-4 z-30 shadow-lg">{modalError}</div>}
 
        <div className={`absolute top-24 left-1/2 -translate-x-1/2 bg-blue-600/80 text-white text-sm rounded-lg py-2 px-4 pointer-events-none transition-opacity duration-300 z-20 ${showInitialTooltips ? 'opacity-100' : 'opacity-0'}`}>
           <i>{t('tooltip.initialHint')}</i>

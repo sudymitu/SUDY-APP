@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import FileUpload from '../components/FileUpload';
-// FIX: Imported VideoCameraIcon to resolve reference error.
 import { SparklesIcon, LoadingSpinner, TrashIcon, WandIcon, VideoCameraIcon } from '../components/icons/index';
 import { EnhanceState, Tab, VideoResult } from '../types';
 import { startVideoGeneration, checkVideoOperationStatus, optimizeVideoPrompt } from '../services/geminiService';
@@ -211,11 +210,18 @@ const VeoTab: React.FC<VeoTabProps> = ({ initialState, state, setState, onClear,
       <div className="flex flex-col lg:flex-row gap-4 sm:gap-8 p-4 md:p-8">
         {/* Left Panel: Controls */}
         <div className="lg:w-1/3 bg-gray-100/50 dark:bg-gray-800/50 rounded-lg p-4 sm:p-6 space-y-6 lg:overflow-y-auto lg:max-h-[calc(100vh-12rem)]">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex justify-between items-center">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">{t('veo.title')}</h2>
               <button onClick={onClear} className="p-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors" title={t('render.button.clear')}>
                   <TrashIcon className="w-5 h-5" />
               </button>
+          </div>
+          <div className="text-sm bg-indigo-100 dark:bg-indigo-900/30 p-3 rounded-md border border-indigo-200 dark:border-indigo-800">
+              <p className="text-gray-800 dark:text-gray-200">{t('veo.masterScriptLink')}{' '} 
+                  <a href="https://ai.studio/apps/drive/1fJgkdgReNo0-31zIE7LjgU8Z2qKQBoIT" target="_blank" rel="noopener noreferrer" className="font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+                      SUDY MASTER SCRIPT
+                  </a>.
+              </p>
           </div>
           
           <div>

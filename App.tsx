@@ -2,9 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import TabButton from './components/TabButton';
-import { Tab, EnhanceState, Theme, ImageResult, GenerationInfo, VideoResult } from './types';
+import { Tab, EnhanceState, Theme, ImageResult, GenerationInfo, VideoResult, Message } from './types';
 import { ASPECT_RATIO_KEYS, RENDER_VIEW_KEYS, IMAGE_GENERATION_MODELS } from './constants';
-// FIX: Changed to a default import to match the export type.
 import FloorPlanRenderTab from './tabs/FloorPlanRenderTab';
 import TrainingTab from './tabs/TrainingTab';
 import EnhanceTab from './tabs/EnhanceTab';
@@ -15,13 +14,11 @@ import TechnicalDrawingTab from './tabs/TechnicalDrawingTab';
 import { useTranslation } from './hooks/useTranslation';
 import DonationModal from './components/DonationModal';
 import ImageLibraryTab from './tabs/ImageLibraryTab';
-import FloatingDonateButton from './components/FloatingDonateButton';
 import { 
     SparklesIcon, 
     LightningBoltIcon,
     HomeIcon,
     FolderOpenIcon,
-    ArmchairIcon,
     BlueprintIcon,
     PhotoIcon,
     PencilRulerIcon,
@@ -35,7 +32,6 @@ import {
     AvatarIcon,
     CubeIcon,
 } from './components/icons';
-import ApiQuotaDisplay from './components/ApiQuotaDisplay';
 import { nanoid } from 'nanoid';
 import { useImageLibrary } from './contexts/ImageLibraryContext';
 import InfoModal from './components/InfoModal';
@@ -44,15 +40,18 @@ import Upscale4KTab from './tabs/Upscale4KTab';
 import VeoTab from './tabs/VeoTab';
 import { useActivation } from './contexts/ActivationContext';
 import FloorPlanColoringTab from './tabs/IsometricRenderTab';
-// FIX: Import the ActivationModal component to resolve the reference error.
 import ActivationModal from './components/ActivationModal';
 import VirtualTourTab from './tabs/VirtualTourTab';
 import RenderTab from './tabs/RenderTab';
+import Chatbot from './components/Chatbot';
+import { dataURLtoBase64, fileToDataURL, base64ToFile } from './utils/file';
+import FloatingDonateButton from './components/FloatingDonateButton';
 
 
 const initialRenderAIState = {
   mainImageFile: null,
   mainImageUrl: null,
+  processedImageUrl: null,
   refImageFile: null,
   refImageUrl: null,
   prompt: '',
@@ -63,6 +62,10 @@ const initialRenderAIState = {
   useLineArt: false,
   lineArtImage: null,
   sharpnessAdherence: 7,
+  initialStateFromOtherTab: null,
+  useRandomPrompts: false, // For new random prompt feature
+  promptBankCategory: 'exterior', // For new random prompt feature
+  adaptationMode: null,
 };
 
 const initialQuickGenerateState = {
@@ -79,7 +82,7 @@ const initialEnhanceState = {
   originalImageSrc: null,
   processedImageSrc: null,
   prompt: '',
-  autoOptimizePrompt: true,
+  autoOptimizePrompt: false, // Set to false by default as requested
   creativity: 5,
   aspectRatio: 'Original Aspect Ratio',
   numResults: 1,
@@ -90,6 +93,7 @@ const initialEnhanceState = {
   elements: Array(6).fill(null).map(() => ({ id: nanoid(), file: null, name: '', dataUrl: null })),
   initialStateFromOtherTab: null,
   drawingDataUrl: null,
+  preInpaintSrc: null, // For reverting inpaint edits
 };
 
 const initialFloorPlanState = {
@@ -133,6 +137,8 @@ const initialTrainingState = {
     generationMode: 'text', // 'text' or 'sketch'
     imageModel: IMAGE_GENERATION_MODELS[0].value,
     aspectRatio: ASPECT_RATIO_KEYS[1], // 16:9
+    featureType: 'geometry',
+    featureImage: null,
 };
 
 const initialTechDrawingState = {
@@ -222,13 +228,15 @@ const App: React.FC = () => {
   const { t } = useTranslation();
   const { images, addMedia } = useImageLibrary();
   const { isActivated, openActivationModal } = useActivation();
+  const [imageForChatbot, setImageForChatbot] = useState<File | null>(null);
+  const [chatMessages, setChatMessages] = useState<Message[]>([]);
+
 
   const TAB_ICONS = getTabIcons(isActivated);
 
   // New state for modals
   const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
-  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const shownFeedbackMilestones = useRef(new Set());
 
   const [theme, setThemeState] = useState<Theme>(() => {
@@ -273,6 +281,27 @@ const App: React.FC = () => {
     });
   };
   
+  const handleBotAction = async (tab: Tab, stateUpdate: any, file: File | null) => {
+    const newState = { ...stateUpdate };
+
+    if (file) {
+      const imageUrl = await fileToDataURL(file);
+      const { base64, mimeType } = dataURLtoBase64(imageUrl);
+      const imagePayload = { image: base64, mimeType };
+
+      // Most tabs use `initialStateFromOtherTab` which expects `EnhanceState` format
+      newState.initialStateFromOtherTab = imagePayload;
+    }
+
+    updateTabState(tab, (prevState: any) => ({
+      // Reset the tab to its default state first to clear any old data
+      ...initialTabStates[tab as keyof typeof initialTabStates],
+      // Then apply the new state from the chatbot
+      ...newState,
+    }));
+    setActiveTab(tab);
+  };
+
   const consumeInitialStateForTab = (tab: Tab) => {
     setTabStates(prev => {
         if (prev[tab]?.initialStateFromOtherTab) {
@@ -410,6 +439,13 @@ const App: React.FC = () => {
     addMedia(newImage);
   };
 
+  const handleSendToChatbot = (image: ImageResult) => {
+    const file = base64ToFile(image.base64, `image-from-view-${image.id}.jpg`, image.mimeType);
+    setImageForChatbot(file);
+    setChatMessages(prev => [...prev]); // Trigger chatbot to notice file
+    setFullscreenState(null); // Close fullscreen view
+  };
+
   const WelcomeModalContent = () => {
     const { t } = useTranslation();
     const features: string[] = JSON.parse(t('welcomeModal.features'));
@@ -440,13 +476,6 @@ const App: React.FC = () => {
             </div>
         </>
       );
-  };
-
-  const HelpModalContent = () => {
-    const { t } = useTranslation();
-    return (
-      <div dangerouslySetInnerHTML={{ __html: t('helpModal.content') }} />
-    );
   };
 
   const handleTabClick = (tabKey: Tab) => {
@@ -482,11 +511,13 @@ const App: React.FC = () => {
                 />;
       case Tab.RenderAI:
         return <RenderTab
+                    initialState={tabStates[Tab.RenderAI].initialStateFromOtherTab}
                     state={tabStates[Tab.RenderAI]}
                     setState={(s) => updateTabState(Tab.RenderAI, s)}
                     onClear={() => clearTabState(Tab.RenderAI)}
                     onEnhance={handleEnhance} 
                     onFullscreen={handleFullscreen} 
+                    onConsumeInitialState={() => consumeInitialStateForTab(Tab.RenderAI)}
                 />;
       case Tab.FloorPlanRender:
         return <FloorPlanRenderTab 
@@ -591,7 +622,6 @@ const App: React.FC = () => {
                     label={t(tabKey)}
                     icon={TAB_ICONS[tabKey]}
                     isActive={activeTab === tabKey}
-                    // FIX: Added missing 'isExpanded' prop to satisfy the TabButtonProps interface.
                     isExpanded={isSidebarExpanded}
                     onClick={() => handleTabClick(tabKey)}
                     isNew={NEW_TABS.includes(tabKey)}
@@ -622,10 +652,18 @@ const App: React.FC = () => {
             </main>
         </div>
         
-        <FloatingDonateButton 
-            onOpenDonationModal={() => setIsDonationModalOpen(true)}
-            onOpenInfoModal={() => setIsHelpModalOpen(true)}
-        />
+        <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-3">
+            <Chatbot 
+                messages={chatMessages}
+                setMessages={setChatMessages}
+                onAction={handleBotAction}
+                onOpenDonationModal={() => setIsDonationModalOpen(true)}
+                initialFile={imageForChatbot}
+                onInitialFileConsumed={() => setImageForChatbot(null)}
+            />
+            <FloatingDonateButton onClick={() => setIsDonationModalOpen(true)} />
+        </div>
+
 
         <ActivationModal />
 
@@ -637,6 +675,7 @@ const App: React.FC = () => {
                 onNext={handleNextFullscreen}
                 onPrev={handlePrevFullscreen}
                 onSave={handleSaveFilteredImage}
+                onSendToChatbot={handleSendToChatbot}
             />
         )}
         <ApiKeyModal 
@@ -665,15 +704,6 @@ const App: React.FC = () => {
             <FeedbackModalContent />
         </InfoModal>
         
-        <InfoModal
-            isOpen={isHelpModalOpen}
-            onClose={() => setIsHelpModalOpen(false)}
-            title={t('helpModal.title')}
-            showDonateButton={true}
-            onOpenDonationModal={() => setIsDonationModalOpen(true)}
-        >
-            <HelpModalContent />
-        </InfoModal>
     </div>
   );
 };

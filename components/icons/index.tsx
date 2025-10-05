@@ -364,6 +364,20 @@ export const ArrowUturnDownIcon = ({ className }: { className?: string }) => (
 
 export const SelectionIcon = ({ className }: { className?: string }) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8.25V7.5a2.25 2.25 0 012.25-2.25h1.5M3 15.75V16.5a2.25 2.25 0 002.25 2.25h1.5M21 8.25V7.5a2.25 2.25 0 00-2.25-2.25h-1.5M21 15.75V16.5a2.25 2.25 0 01-2.25 2.25h-1.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8.25V7.5a2.25 2.25 0 012.25-2.25h1.5M3 15.75V16.5a2.25 2.25 0 002.25 2.25h1.5M21 8.25V7.5a2.25 2.25 0 00-2.25-2.25h-1.5M21 15.75V16.5a2.25 2.25 0 01-2.25-2.25h-1.5" />
+    </svg>
+);
+
+// FIX: Add PaperAirplaneIcon for Chatbot send button
+export const PaperAirplaneIcon = ({ className }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+    </svg>
+);
+
+// FIX: Add ChatBubbleOvalLeftEllipsisIcon for Chatbot open button
+export const ChatBubbleOvalLeftEllipsisIcon = ({ className }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.761 9.761 0 01-2.542-.358 12.001 12.001 0 01-11.134-11.134A9.761 9.761 0 012.25 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
     </svg>
 );

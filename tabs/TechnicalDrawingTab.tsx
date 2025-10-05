@@ -113,7 +113,6 @@ For example, if the user writes "modern house" and the image shows a two-story f
       const generationState = { ...state, sourceImageFile: null, sourceImageUrl: `data:${mimeType};base64,${base64}` };
 
       const newResults = responses
-        // FIX: Explicitly type the return value of the map function to fix the type predicate error in the subsequent filter.
         .map((res): ImageResultType | null => {
             const b64 = getBase64FromResponse(res);
             if (!b64) return null;
@@ -131,7 +130,7 @@ For example, if the user writes "modern house" and the image shows a two-story f
 
 
       if (newResults.length < 4) {
-        setError(t('techDraw.error.partialResults').replace('{{count}}', String(newResults.length)));
+        setError(t('techDraw.error.partialResults', { count: String(newResults.length) }));
       }
       
       if (newResults.length > 0) {

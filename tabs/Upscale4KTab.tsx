@@ -3,7 +3,6 @@ import FileUpload from '../components/FileUpload';
 import { SparklesIcon, LoadingSpinner, TrashIcon } from '../components/icons/index';
 import { ImageResult as ImageResultType, EnhanceState, Tab } from '../types';
 import ImageComparison from '../components/ImageComparison';
-// FIX: The import path was incorrect and incomplete. Corrected to import from geminiService.
 import { upscaleImageTo4K, getBase64FromResponse } from '../services/geminiService';
 import { nanoid } from 'nanoid';
 import { useTranslation } from '../hooks/useTranslation';
@@ -22,7 +21,6 @@ interface Upscale4KTabProps {
   onConsumeInitialState: () => void;
 }
 
-// FIX: The component was missing. Reconstructed based on similar components and functionality.
 const Upscale4KTab: React.FC<Upscale4KTabProps> = ({ initialState, state, setState, onClear, onEnhance, onFullscreen, onConsumeInitialState }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -149,5 +147,4 @@ const Upscale4KTab: React.FC<Upscale4KTabProps> = ({ initialState, state, setSta
   );
 };
 
-// FIX: Added default export to resolve import error in App.tsx
 export default Upscale4KTab;

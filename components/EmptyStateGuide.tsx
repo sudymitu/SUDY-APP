@@ -2,14 +2,12 @@
 import React from 'react';
 import { Tab } from '../types';
 import { useTranslation } from '../hooks/useTranslation';
-// FIX: Import the ViewfinderCircleIcon to be used for the RenderAI tab.
-import { SparklesIcon, LightningBoltIcon, HomeIcon, ArmchairIcon, BlueprintIcon, PhotoIcon, PencilRulerIcon, ViewfinderCircleIcon } from './icons';
+import { SparklesIcon, LightningBoltIcon, HomeIcon, BlueprintIcon, PhotoIcon, PencilRulerIcon, ViewfinderCircleIcon, ArrowUpOnSquareIcon } from './icons';
 
 interface EmptyStateGuideProps {
   tabType: Tab;
 }
 
-// FIX: Replaced obsolete 'ExteriorRender' and 'InteriorRender' with 'RenderAI' and used the correct icon.
 const ICONS: Partial<Record<Tab, React.ReactNode>> = {
     [Tab.Enhance]: <SparklesIcon className="w-16 h-16 mb-4" />,
     [Tab.QuickGenerate]: <LightningBoltIcon className="w-16 h-16 mb-4" />,
@@ -17,6 +15,7 @@ const ICONS: Partial<Record<Tab, React.ReactNode>> = {
     [Tab.FloorPlanRender]: <BlueprintIcon className="w-16 h-16 mb-4" />,
     [Tab.ImageFromReference]: <PhotoIcon className="w-16 h-16 mb-4" />,
     [Tab.TechnicalDrawing]: <PencilRulerIcon className="w-16 h-16 mb-4" />,
+    [Tab.Upscale4K]: <ArrowUpOnSquareIcon className="w-16 h-16 mb-4" />,
 };
 
 const EmptyStateGuide: React.FC<EmptyStateGuideProps> = ({ tabType }) => {
@@ -25,7 +24,10 @@ const EmptyStateGuide: React.FC<EmptyStateGuideProps> = ({ tabType }) => {
     const titleKey = `guide.${tabType}.title`;
     let features: string[] = [];
     try {
-        features = JSON.parse(t(`guide.${tabType}.features`));
+        const featuresJson = t(`guide.${tabType}.features`);
+        if (featuresJson) {
+            features = JSON.parse(featuresJson);
+        }
     } catch(e) {
         console.error("Failed to parse features JSON from translations", e);
     }

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import FileUpload from '../components/FileUpload';
 import SelectInput from '../components/SelectInput';
 import Slider from '../components/Slider';
@@ -10,15 +10,18 @@ import { getBase64FromResponse, analyzeImageForRenderPrompt, generateImageFromIm
 import { nanoid } from 'nanoid';
 import { useTranslation } from '../hooks/useTranslation';
 import { useImageLibrary } from '../contexts/ImageLibraryContext';
-import { fileToDataURL, fileToBase64, dataURLtoBase64 } from '../utils/file';
+import { fileToDataURL, fileToBase64, dataURLtoBase64, base64ToFile } from '../utils/file';
 import { useApiQuota } from '../contexts/ApiQuotaContext';
 import EmptyStateGuide from '../components/EmptyStateGuide';
 import { useActivation } from '../contexts/ActivationContext';
 
 
-const PromptBank: React.FC<{ onSelect: (prompt: string) => void }> = ({ onSelect }) => {
+const PromptBank: React.FC<{ 
+    activeCategory: string;
+    setActiveCategory: (category: string) => void;
+    onSelect: (prompt: string) => void 
+}> = ({ activeCategory, setActiveCategory, onSelect }) => {
     const { t } = useTranslation();
-    const [activeCategory, setActiveCategory] = useState('exterior');
     const categories = ['exterior', 'interior', 'landscape', 'planning'];
 
     const getPromptsForCategory = (category: string): string[] => {
@@ -62,20 +65,31 @@ const PromptBank: React.FC<{ onSelect: (prompt: string) => void }> = ({ onSelect
     );
 };
 
-// FIX: Added interface definition for RenderTabProps to resolve TypeScript error.
 interface RenderTabProps {
+  initialState: EnhanceState | null;
   state: any;
   setState: (state: any) => void;
   onClear: () => void;
   onEnhance: (state: EnhanceState) => void;
   onFullscreen: (images: ImageResultType[], startIndex: number) => void;
+  onConsumeInitialState: () => void;
 }
 
-const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhance, onFullscreen }) => {
+const getImageDimensions = (dataUrl: string): Promise<{ width: number, height: number }> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+};
+
+const RenderTab: React.FC<RenderTabProps> = ({ initialState, state, setState, onClear, onEnhance, onFullscreen, onConsumeInitialState }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const jsonInputRef = useRef<HTMLInputElement>(null);
+  const styleFileInputRef = useRef<HTMLInputElement>(null);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
 
   const { t, language } = useTranslation();
   const { addMedia } = useImageLibrary();
@@ -84,14 +98,33 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
 
   const translatedAspectRatios = useMemo(() => ASPECT_RATIO_KEYS.map(key => t(key)), [t]);
   
-  const handleFileChange = async (file: File | null) => {
+  const handleFileChange = useCallback(async (file: File | null) => {
     if (file) {
       const dataUrl = await fileToDataURL(file);
-      setState({ ...state, mainImageFile: file, mainImageUrl: dataUrl, lineArtImage: null });
+      const dimensions = await getImageDimensions(dataUrl);
+      setImageDimensions(dimensions);
+      setState((prevState: any) => ({ 
+        ...prevState, 
+        mainImageFile: file, 
+        mainImageUrl: dataUrl, 
+        processedImageUrl: dataUrl,
+        lineArtImage: null,
+        aspectRatio: 'aspect.original',
+        adaptationMode: null,
+      }));
     } else {
-      setState({ ...state, mainImageFile: null, mainImageUrl: null, lineArtImage: null });
+      setState((prevState: any) => ({ ...prevState, mainImageFile: null, mainImageUrl: null, processedImageUrl: null, lineArtImage: null }));
+      setImageDimensions(null);
     }
-  };
+  }, [setState]);
+
+  useEffect(() => {
+    if (initialState) {
+        const file = base64ToFile(initialState.image, `render-ai-source-${nanoid(5)}.jpg`, initialState.mimeType);
+        handleFileChange(file);
+        onConsumeInitialState();
+    }
+  }, [initialState, handleFileChange, onConsumeInitialState]);
 
   const handleRefImageChange = async (file: File | null) => {
     if (file) {
@@ -101,9 +134,76 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
         setState({ ...state, refImageFile: null, refImageUrl: null });
     }
   };
+
+  const parseAspectRatio = useCallback((ratioStr: string): number | null => {
+      if (!ratioStr || ratioStr === t('aspect.original')) return null;
+      const ratioMatch = ratioStr.match(/(\d+:\d+)/);
+      if (!ratioMatch) return null;
+
+      const [w, h] = ratioMatch[0].split(':').map(Number);
+      if (isNaN(w) || isNaN(h) || h === 0) return null;
+      return w / h;
+  }, [t]);
+
+  useEffect(() => {
+    const processImage = async () => {
+        if (!state.mainImageUrl || !imageDimensions || state.aspectRatio === 'aspect.original') {
+            if(state.mainImageUrl) setState((s:any) => ({...s, processedImageUrl: s.mainImageUrl}));
+            return;
+        }
+
+        const targetAspectRatio = parseAspectRatio(t(state.aspectRatio));
+        if (targetAspectRatio === null) return;
+
+        const originalAspectRatio = imageDimensions.width / imageDimensions.height;
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const img = new Image();
+        img.onload = () => {
+            if (state.adaptationMode === 'crop') {
+                let sx = 0, sy = 0, sWidth = img.width, sHeight = img.height;
+                if (targetAspectRatio > originalAspectRatio) { // Taller than target
+                    sHeight = img.width / targetAspectRatio;
+                    sy = (img.height - sHeight) / 2;
+                } else { // Wider than target
+                    sWidth = img.height * targetAspectRatio;
+                    sx = (img.width - sWidth) / 2;
+                }
+                canvas.width = sWidth;
+                canvas.height = sHeight;
+                ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, sWidth, sHeight);
+
+            } else if (state.adaptationMode === 'extend') {
+                let newWidth, newHeight;
+                if (targetAspectRatio > originalAspectRatio) { // Wider than original
+                    newWidth = img.height * targetAspectRatio;
+                    newHeight = img.height;
+                } else { // Taller than original
+                    newWidth = img.width;
+                    newHeight = img.width / targetAspectRatio;
+                }
+                canvas.width = newWidth;
+                canvas.height = newHeight;
+                
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                const dx = (newWidth - img.width) / 2;
+                const dy = (newHeight - img.height) / 2;
+
+                ctx.drawImage(img, dx, dy);
+            }
+             setState((s:any) => ({...s, processedImageUrl: canvas.toDataURL('image/jpeg')}));
+        };
+        img.src = state.mainImageUrl;
+    };
+    processImage();
+  }, [state.aspectRatio, state.adaptationMode, state.mainImageUrl, imageDimensions, t, parseAspectRatio, setState]);
   
   const handleAnalyze = async () => {
-      if (!state.mainImageFile) {
+      if (!state.processedImageUrl) {
         setError(t('render.error.noImageAnalyze'));
         return;
       }
@@ -111,7 +211,7 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
       setError(null);
       
       try {
-          const { base64, mimeType } = await fileToBase64(state.mainImageFile);
+          const { base64, mimeType } = dataURLtoBase64(state.processedImageUrl);
           
           const promptPromise = analyzeImageForRenderPrompt(base64, mimeType, state.prompt, language);
           
@@ -140,9 +240,21 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
       }
   };
 
+  const getPromptsForCategory = (category: string): string[] => {
+    try {
+        const key = `promptBank.${category}.prompts`;
+        const promptsJson = t(key);
+        if (promptsJson === key) return []; // Translation not found
+        return JSON.parse(promptsJson);
+    } catch (e) {
+        console.error(`Failed to parse prompts for category: ${category}`, e);
+        return [];
+    }
+  };
+
 
   const handleGenerate = async () => {
-    if (!state.mainImageFile) {
+    if (!state.processedImageUrl) {
       setError(t('render.error.noImageGenerate'));
       return;
     }
@@ -166,12 +278,18 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
             sourceImageInfo = dataURLtoBase64(state.lineArtImage);
             imageSourceDescription = "Use the provided black and white line art image as the absolute structural blueprint for the scene.";
         } else {
-            sourceImageInfo = await fileToBase64(state.mainImageFile);
+            sourceImageInfo = dataURLtoBase64(state.processedImageUrl);
             imageSourceDescription = "Use the provided full-color source image as the primary base for structure.";
         }
         
         const generationPromises = [];
+        const randomPrompts = state.useRandomPrompts ? getPromptsForCategory(state.promptBankCategory) : [];
+
         for (let i = 0; i < state.numResults; i++) {
+            let currentPrompt = state.prompt;
+            if (state.useRandomPrompts && randomPrompts.length > 0) {
+                currentPrompt = randomPrompts[Math.floor(Math.random() * randomPrompts.length)];
+            }
             const fullPrompt = `
                 **TASK:** Photorealistically render a new image by combining a main subject from a source image with a new atmosphere and style.
 
@@ -197,7 +315,7 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
 
                 **USER PROMPT (specific instructions):**
                 """
-                ${state.prompt}
+                ${currentPrompt}
                 """
                 
                 **LoRA STYLE (technical details):**
@@ -207,7 +325,6 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
 
                 **TECHNICAL REQUESTS:**
                 - **Structural Adherence (0=Creative, 10=Strict):** ${state.sharpnessAdherence}
-                - **Aspect Ratio:** ${t(state.aspectRatio)}
                 
                 **NEGATIVE PROMPTS:** Do not change the materials of the main building. No watermarks, text, signatures. Avoid blurry, out of focus, cgi, render, unreal engine, fake results.
             `;
@@ -216,7 +333,7 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
 
         const responses = await Promise.all(generationPromises);
         
-        const generationState = { ...state, mainImageFile: null, mainImageUrl: state.mainImageUrl, refImageFile: null, refImageUrl: null };
+        const generationState = { ...state, mainImageFile: null, mainImageUrl: state.mainImageUrl, processedImageUrl: state.processedImageUrl, refImageFile: null, refImageUrl: null };
 
         const newResults = responses
             .map((res): ImageResultType | null => {
@@ -256,24 +373,34 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
     }
   };
   
-  const handleLoadJsonClick = () => {
+  const handleLoadStyleFileClick = () => {
     if (!isActivated) {
       openActivationModal();
     } else {
-      jsonInputRef.current?.click();
+      styleFileInputRef.current?.click();
     }
   };
 
-  const handleJsonFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleStyleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
         const reader = new FileReader();
         reader.onload = (event) => {
             try {
                 const content = event.target?.result as string;
-                const parsedContent = JSON.parse(content);
-                setState({ ...state, loraPrompt: JSON.stringify(parsedContent, null, 2) });
-                setError(null);
+                const json = JSON.parse(content);
+                // Check for new .lora format first, then fall back to old .json format
+                if (json.stylePrompt && typeof json.stylePrompt === 'string') {
+                    setState({ ...state, loraPrompt: json.stylePrompt });
+                    setError(null);
+                } else if (json.trainedStylePrompt && typeof json.trainedStylePrompt === 'string') {
+                    setState({ ...state, loraPrompt: json.trainedStylePrompt });
+                    setError(null);
+                } else {
+                     // Fallback for this tab's specific auto-analysis format which might be a full JSON object
+                    setState({ ...state, loraPrompt: JSON.stringify(json, null, 2) });
+                    setError(null);
+                }
             } catch (err) {
                 setError(t('render.error.readJsonFailed'));
                 console.error(err);
@@ -284,7 +411,7 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
     if(e.target) e.target.value = '';
   };
 
-  const canGenerate = !isGenerating && !isAnalyzing && !!state.mainImageFile;
+  const canGenerate = !isGenerating && !isAnalyzing && !!state.mainImageFile && (state.aspectRatio === 'aspect.original' || !!state.adaptationMode);
 
   return (
     <div className="flex flex-col lg:flex-row gap-4 sm:gap-8 p-4 md:p-8">
@@ -297,13 +424,13 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
           </button>
         </div>
         
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 items-start">
             <div>
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('render.upload.title')}</h3>
-                <FileUpload id={`main-upload-render`} onFileChange={handleFileChange} previewUrl={state.mainImageUrl} onClear={() => setState({...state, mainImageFile: null, mainImageUrl: null})} containerClassName="h-40" />
+                <FileUpload id={`main-upload-render`} onFileChange={handleFileChange} previewUrl={state.mainImageUrl} onClear={() => handleFileChange(null)} containerClassName="h-40" />
             </div>
              <div>
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('floorplan.upload.ref.title')}</h3>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('render.upload.ref.title')}</h3>
                 <FileUpload id={`ref-upload-render`} onFileChange={handleRefImageChange} previewUrl={state.refImageUrl} onClear={() => setState({...state, refImageFile: null, refImageUrl: null})} containerClassName="h-40" />
             </div>
         </div>
@@ -315,10 +442,24 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
                 onChange={(e) => setState({ ...state, prompt: e.target.value })}
                 placeholder={t('render.prompt.placeholder')}
                 className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-md p-2 h-24 resize-none"
+                disabled={state.useRandomPrompts}
             />
+            <label className="flex items-center space-x-2 cursor-pointer mt-2">
+                <input
+                    type="checkbox"
+                    checked={state.useRandomPrompts}
+                    onChange={(e) => setState({...state, useRandomPrompts: e.target.checked})}
+                    className="form-checkbox h-4 w-4 text-blue-600 bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Use Random Prompts from Bank</span>
+            </label>
         </div>
         
-        {language === 'vi' && <PromptBank onSelect={(p) => setState({ ...state, prompt: p })} />}
+        {language === 'vi' && <PromptBank 
+            activeCategory={state.promptBankCategory}
+            setActiveCategory={(cat) => setState({...state, promptBankCategory: cat})}
+            onSelect={(p) => setState({ ...state, prompt: p })} 
+        />}
 
          <div>
             <h3 className="text-md font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('render.lora.title')}</h3>
@@ -328,19 +469,24 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
                 placeholder={t('render.lora.placeholder')}
                 className="w-full bg-white dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 rounded-md p-2 h-24 resize-none font-mono text-xs"
             />
-            <div className="flex space-x-2 pt-2">
-                <input type="file" accept=".json" ref={jsonInputRef} onChange={handleJsonFileChange} className="hidden" />
+            <div className="flex items-center gap-2 pt-2">
+                <input type="file" accept=".json,.lora" ref={styleFileInputRef} onChange={handleStyleFileChange} className="hidden" />
                 <button 
-                  onClick={handleLoadJsonClick} 
-                  title={!isActivated ? t('tooltip.requiresActivation') : t('render.button.loadLora')}
+                  onClick={handleLoadStyleFileClick} 
+                  title={!isActivated ? t('tooltip.requiresActivation') : t('training.button.loadStyleFile')}
                   className={`w-full text-sm bg-gray-300/80 dark:bg-gray-700/80 text-gray-800 dark:text-white font-medium py-2 px-2 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2 ${!isActivated ? 'opacity-50 cursor-pointer' : ''}`}
                 >
                     <FolderOpenIcon className="w-4 h-4" />
-                    <span>{t('render.button.loadLora')}</span>
+                    <span>{t('training.button.loadStyleFile')}</span>
                      {!isActivated && <LockClosedIcon className="w-3.5 h-3.5 ml-1" />}
                 </button>
-                 {state.loraPrompt && <p className="text-xs text-green-600 dark:text-green-400 px-1 pt-1 flex-grow text-right">{t('render.lora.loaded')}</p>}
+                 {state.loraPrompt && (
+                    <button onClick={() => setState({...state, loraPrompt: ''})} className="p-2 bg-red-500/20 text-red-500 rounded-md hover:bg-red-500/40">
+                        <TrashIcon className="w-4 h-4" />
+                    </button>
+                )}
             </div>
+            {state.loraPrompt && <p className="text-xs text-green-600 dark:text-green-400 px-1 pt-1">{t('render.lora.loaded')}</p>}
         </div>
 
         <div className="border-t border-gray-300 dark:border-gray-700 pt-6 space-y-6">
@@ -382,10 +528,25 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
               options={translatedAspectRatios} 
               value={t(state.aspectRatio)} 
               onChange={(val) => {
-                  const key = ASPECT_RATIO_KEYS[translatedAspectRatios.indexOf(val)];
-                  setState({ ...state, aspectRatio: key });
+                  const key = ASPECT_RATIO_KEYS[translatedAspectRatios.indexOf(val)] || 'aspect.original';
+                  const adaptationRequired = key !== 'aspect.original';
+                  setState({ 
+                      ...state, 
+                      aspectRatio: key, 
+                      adaptationMode: adaptationRequired ? 'crop' : null 
+                  });
+                  if (!adaptationRequired) setError(null);
               }} 
           />
+          {state.aspectRatio !== 'aspect.original' && state.mainImageFile && (
+              <div className="p-3 bg-gray-200 dark:bg-gray-900/50 rounded-md -mt-3">
+                  <p className="text-sm font-medium mb-2">{t('enhance.options.adaptationPrompt')}</p>
+                  <div className="flex space-x-2">
+                       <button onClick={() => setState({ ...state, adaptationMode: 'crop' })} className={`w-full py-2 rounded-md text-sm transition-colors ${state.adaptationMode === 'crop' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 hover:bg-gray-300'}`}>{t('enhance.options.adaptationCrop')}</button>
+                      <button onClick={() => setState({ ...state, adaptationMode: 'extend' })} className={`w-full py-2 rounded-md text-sm transition-colors ${state.adaptationMode === 'extend' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 hover:bg-gray-300'}`}>{t('enhance.options.adaptationExtend')}</button>
+                  </div>
+              </div>
+          )}
         
           <Slider label={t('render.options.resultCount')} min={1} max={6} step={1} value={state.numResults} onChange={(v) => setState({ ...state, numResults: v })} />
 
@@ -414,14 +575,21 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
         {error && <div className="bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 p-4 rounded-md">{error}</div>}
         
         {!isGenerating && state.results.length === 0 && !error && (
-            <EmptyStateGuide tabType={Tab.RenderAI} />
+            !state.processedImageUrl ? (
+                <EmptyStateGuide tabType={Tab.RenderAI} />
+            ) : (
+                <div className="flex flex-col items-center justify-center">
+                    <p className="mb-2 font-semibold">{t('comparison.original')}</p>
+                    <img src={state.processedImageUrl} alt="Preview" className="max-w-full max-h-[70vh] rounded-lg shadow-md" />
+                 </div>
+            )
         )}
 
         {state.results.length === 1 && (
             <div className="w-full max-w-3xl mx-auto flex items-center justify-center h-full">
                 <SideBySideComparison 
                     key={state.results[0].id} 
-                    originalImageSrc={state.mainImageUrl} 
+                    originalImageSrc={state.processedImageUrl} 
                     generatedResult={state.results[0]} 
                     onEnhance={onEnhance} 
                     onFullscreen={() => onFullscreen(state.results, 0)} 
@@ -433,7 +601,7 @@ const RenderTab: React.FC<RenderTabProps> = ({ state, setState, onClear, onEnhan
                 {state.results.map((result: ImageResultType, index: number) => (
                     <SideBySideComparison 
                         key={result.id} 
-                        originalImageSrc={state.mainImageUrl} 
+                        originalImageSrc={state.processedImageUrl} 
                         generatedResult={result} 
                         onEnhance={onEnhance} 
                         onFullscreen={() => onFullscreen(state.results, index)} 

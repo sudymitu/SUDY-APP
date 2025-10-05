@@ -1,5 +1,7 @@
 
 
+// FIX: Removed a self-referential import of `Tab` that was causing a declaration conflict.
+// import { Tab } from './types';
 
 export enum Tab {
   Welcome = 'Welcome',
@@ -47,4 +49,25 @@ export enum Theme {
     Dark = 'dark',
     System = 'system',
     Pink = 'pink',
+}
+
+export interface Message {
+  id: string;
+  sender: 'user' | 'bot';
+  text: string;
+  imagePreview?: string;
+  imageFile?: File;
+  botAction?: {
+    tab: Tab;
+    prompt?: string;
+    buttonText: string;
+  };
+  suggestedPrompt?: string;
+}
+
+export interface LoraFileContent {
+  refImages: { base64: string; mimeType: string; name: string }[];
+  stylePrompt: string;
+  featureType: 'geometry' | 'material';
+  featureImage: string; // base64
 }

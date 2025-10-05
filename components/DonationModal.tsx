@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { XMarkIcon } from './icons';
 import { useTranslation } from '../hooks/useTranslation';
+import { QR_CODE_BASE64 } from '../assets/qr-code';
 
 interface DonationModalProps {
   isOpen: boolean;
@@ -44,6 +45,10 @@ const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose }) => {
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
           {t('donationMessage')}
         </p>
+
+        <div className="flex justify-center mb-4">
+          <img src={QR_CODE_BASE64} alt="QR Code for donation" className="w-48 h-48 rounded-md border-4 border-white dark:border-gray-700 shadow-md" />
+        </div>
 
         <div className="p-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg text-left space-y-3">
           <div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { EnhanceState, ImageResult, Tab } from '../types';
 import { SparklesIcon, LoadingSpinner, DownloadIcon, PaintBrushIcon, ExpandIcon, LoopIcon, FolderOpenIcon, TrashIcon, LockClosedIcon } from '../components/icons';
-import { generateImageWithElements, getBase64FromResponse, optimizeEnhancePrompt } from '../services/geminiService';
+import { generateImageWithElements, optimizeEnhancePrompt } from '../services/geminiService';
 import FileUpload from '../components/FileUpload';
 import InpaintingModal from '../components/InpaintingModal';
 import { nanoid } from 'nanoid';
@@ -15,6 +15,8 @@ import { useApiQuota } from '../contexts/ApiQuotaContext';
 import EmptyStateGuide from '../components/EmptyStateGuide';
 import { useActivation } from '../contexts/ActivationContext';
 import { ENHANCE_PROMPTS } from '../promptSuggestions';
+import { getBase64FromResponse } from '../services/geminiService';
+
 
 const getImageDimensions = (dataUrl: string): Promise<{ width: number, height: number }> => {
   return new Promise((resolve, reject) => {
@@ -37,7 +39,7 @@ interface EnhanceTabProps {
 const EnhanceTab: React.FC<EnhanceTabProps> = ({ initialState, state, setState, onClear, onFullscreen, onConsumeInitialState }) => {
   const { t, language } = useTranslation();
   const { addMedia } = useImageLibrary();
-  const { remaining, decrementQuota, forceQuotaDepletion } = useApiQuota();
+  const { decrementQuota, forceQuotaDepletion } = useApiQuota();
   const { isActivated, openActivationModal } = useActivation();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -47,7 +49,7 @@ const EnhanceTab: React.FC<EnhanceTabProps> = ({ initialState, state, setState, 
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [suggestions, setSuggestions] = useState<{ atmosphere: string[], materials: string[], objects: string[], style: string[] }>({ atmosphere: [], materials: [], objects: [], style: [] });
 
-  const jsonInputRef = useRef<HTMLInputElement>(null);
+  const styleFileInputRef = useRef<HTMLInputElement>(null);
   
   const translatedAspectRatios = useMemo(() => ASPECT_RATIO_KEYS.map(key => t(key)), [t]);
 
@@ -106,6 +108,7 @@ const EnhanceTab: React.FC<EnhanceTabProps> = ({ initialState, state, setState, 
           adaptationMode: null,
           results: [],
           drawingDataUrl: null,
+          preInpaintSrc: null, // Reset pre-inpaint state when loading a new image
       }));
   }, [setState, t]);
 
@@ -130,9 +133,10 @@ const EnhanceTab: React.FC<EnhanceTabProps> = ({ initialState, state, setState, 
   const handleInpaintSave = (dataUrl: string) => {
     setState((prevState: any) => ({
         ...prevState,
+        preInpaintSrc: prevState.preInpaintSrc || prevState.originalImageSrc,
         originalImageSrc: dataUrl,
         processedImageSrc: dataUrl,
-        drawingDataUrl: null, // Drawing is baked in, so clear the overlay
+        drawingDataUrl: null, // Drawing is baked in
     }));
   };
 
@@ -142,6 +146,7 @@ const EnhanceTab: React.FC<EnhanceTabProps> = ({ initialState, state, setState, 
           originalImageSrc: dataUrl,
           processedImageSrc: dataUrl,
           drawingDataUrl: null, // A new base image means the old drawing is invalid
+          preInpaintSrc: null, // Reset pre-inpaint state
       }));
   };
   
@@ -292,15 +297,15 @@ const EnhanceTab: React.FC<EnhanceTabProps> = ({ initialState, state, setState, 
     }
   };
   
-  const handleLoadJsonClick = () => {
+  const handleLoadStyleFileClick = () => {
     if (!isActivated) {
       openActivationModal();
     } else {
-      jsonInputRef.current?.click();
+      styleFileInputRef.current?.click();
     }
   };
 
-  const handleJsonFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleStyleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
         const reader = new FileReader();
@@ -308,7 +313,11 @@ const EnhanceTab: React.FC<EnhanceTabProps> = ({ initialState, state, setState, 
             try {
                 const content = event.target?.result as string;
                 const json = JSON.parse(content);
-                if (json.trainedStylePrompt && typeof json.trainedStylePrompt === 'string') {
+                // Check for new .lora format first, then fall back to old .json format
+                if (json.stylePrompt && typeof json.stylePrompt === 'string') {
+                    setState({ ...state, loraPrompt: json.stylePrompt });
+                    setError(null);
+                } else if (json.trainedStylePrompt && typeof json.trainedStylePrompt === 'string') {
                     setState({ ...state, loraPrompt: json.trainedStylePrompt });
                     setError(null);
                 } else {
@@ -356,6 +365,21 @@ const EnhanceTab: React.FC<EnhanceTabProps> = ({ initialState, state, setState, 
       setIsModalOpen(true);
     }
   };
+  
+  const handleKeepInpaint = () => {
+    setState({ ...state, preInpaintSrc: null });
+  };
+  
+  const handleDiscardInpaint = () => {
+    if (state.preInpaintSrc) {
+        setState({ 
+            ...state, 
+            originalImageSrc: state.preInpaintSrc,
+            processedImageSrc: state.preInpaintSrc,
+            preInpaintSrc: null 
+        });
+    }
+  };
 
   const canGenerate = !isLoading && !isOptimizing && !!state.processedImageSrc && (state.aspectRatio === t(ASPECT_RATIO_KEYS[0]) || !!state.adaptationMode);
 
@@ -373,15 +397,31 @@ const EnhanceTab: React.FC<EnhanceTabProps> = ({ initialState, state, setState, 
       <div className="flex flex-col lg:flex-row gap-4 sm:gap-8 p-4 md:p-8">
         {/* Left Panel: Controls */}
         <div className="lg:w-1/3 bg-gray-100/50 dark:bg-gray-800/50 rounded-lg p-4 sm:p-6 space-y-6 lg:overflow-y-auto lg:max-h-[calc(100vh-12rem)]">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">{t('enhance.title')}</h2>
              <button onClick={onClear} className="p-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors" title={t('render.button.clear')}>
               <TrashIcon className="w-5 h-5" />
             </button>
           </div>
+          <div className="text-sm bg-indigo-100 dark:bg-indigo-900/30 p-3 rounded-md border border-indigo-200 dark:border-indigo-800">
+              <p className="text-gray-800 dark:text-gray-200">{t('enhance.magicToolsLink')}{' '} 
+                  <a href="https://ai.studio/apps/drive/1fvOVAddGw7G5ZdRFs_8cgTNbTD4wRsB1" target="_blank" rel="noopener noreferrer" className="font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+                      SUDY Magic Tools
+                  </a>.
+              </p>
+          </div>
 
           <div>
             <h3 className="text-md font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('enhance.upload.title')}</h3>
+             {state.preInpaintSrc && state.results.length > 0 && (
+              <div className="mb-2 p-2 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700/50 rounded-md text-center text-xs">
+                <p className="mb-2 font-semibold">An inpaint edit is active.</p>
+                <div className="flex gap-2">
+                  <button onClick={handleKeepInpaint} className="flex-1 py-1 px-2 rounded bg-green-500 text-white hover:bg-green-600">Keep Inpaint</button>
+                  <button onClick={handleDiscardInpaint} className="flex-1 py-1 px-2 rounded bg-red-500 text-white hover:bg-red-600">Discard Inpaint</button>
+                </div>
+              </div>
+            )}
             <div className="w-full max-w-sm mx-auto lg:max-w-none lg:mx-0">
                 <FileUpload id="enhance-upload" onFileChange={handleFileChange} previewUrl={state.originalImageSrc} onClear={onClear} containerClassName="h-60 lg:aspect-square" />
             </div>
@@ -475,16 +515,23 @@ const EnhanceTab: React.FC<EnhanceTabProps> = ({ initialState, state, setState, 
             )}
              <Slider label={t('render.options.resultCount')} min={1} max={6} step={1} value={state.numResults} onChange={(v) => setState({ ...state, numResults: v })} />
              <div>
-                <input type="file" accept=".json" ref={jsonInputRef} onChange={handleJsonFileChange} className="hidden" />
-                <button
-                  onClick={handleLoadJsonClick}
-                  title={!isActivated ? t('tooltip.requiresActivation') : t('enhance.button.loadLora')}
-                  className={`w-full text-sm bg-gray-300/80 dark:bg-gray-700/80 text-gray-800 dark:text-white font-medium py-2 px-2 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2 ${!isActivated ? 'opacity-50 cursor-pointer' : ''}`}
-                >
-                    <FolderOpenIcon className="w-4 h-4" />
-                    <span>{t('enhance.button.loadLora')}</span>
-                    {!isActivated && <LockClosedIcon className="w-3 h-3 text-yellow-500 ml-1" />}
-                </button>
+                <input type="file" accept=".json,.lora" ref={styleFileInputRef} onChange={handleStyleFileChange} className="hidden" />
+                <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleLoadStyleFileClick}
+                      title={!isActivated ? t('tooltip.requiresActivation') : t('training.button.loadStyleFile')}
+                      className={`w-full text-sm bg-gray-300/80 dark:bg-gray-700/80 text-gray-800 dark:text-white font-medium py-2 px-2 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2 ${!isActivated ? 'opacity-50 cursor-pointer' : ''}`}
+                    >
+                        <FolderOpenIcon className="w-4 h-4" />
+                        <span>{t('training.button.loadStyleFile')}</span>
+                        {!isActivated && <LockClosedIcon className="w-3 h-3 text-yellow-500 ml-1" />}
+                    </button>
+                    {state.loraPrompt && (
+                        <button onClick={() => setState({...state, loraPrompt: ''})} className="p-2 bg-red-500/20 text-red-500 rounded-md hover:bg-red-500/40">
+                            <TrashIcon className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
                 {state.loraPrompt && <p className="text-xs text-green-600 dark:text-green-400 px-1 pt-1">{t('render.lora.loaded')}</p>}
             </div>
           </div>

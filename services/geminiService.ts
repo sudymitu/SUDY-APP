@@ -1,16 +1,13 @@
 import { GoogleGenAI, GenerateContentResponse, Modality, Type } from "@google/genai";
 
 const getAiClient = () => {
-    // Prioritize user-provided API key from localStorage.
-    const userApiKey = localStorage.getItem('user_gemini_api_key');
-    const apiKey = userApiKey || process.env.API_KEY;
+    const apiKey = process.env.API_KEY;
 
     if (!apiKey) {
         // This will prevent the app from making API calls without a key.
         // The error will be visible in the developer console.
-        throw new Error('CRITICAL: API key is missing. Please provide one in Settings or configure the API_KEY environment variable.');
+        throw new Error('CRITICAL: API key is missing. The API_KEY environment variable must be configured.');
     }
-    // FIX: The GoogleGenAI constructor now requires the API key to be passed in an object with the `apiKey` property.
     return new GoogleGenAI({ apiKey });
 };
 
@@ -36,7 +33,7 @@ export const generateLineArtFromImage = async (base64: string, mimeType: string)
     };
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         contents: { parts: [imagePart, textPart] },
         config: {
             responseModalities: [Modality.IMAGE, Modality.TEXT],
@@ -51,7 +48,7 @@ export const generateImageFromImageAndText = async (prompt: string, imageBase64:
     const textPart = { text: prompt };
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         contents: {
             parts: [imagePart, textPart]
         },
@@ -100,7 +97,7 @@ ${elementImages.map((el, index) => `- Element ${index + 1}: ${el.name}`).join('\
     const elementParts = elementImages.map(img => fileToGenerativePart(img.base64, img.mimeType));
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         contents: {
             // The main image part MUST be last for the model to correctly use it as the base for edits.
             parts: [textPart, ...elementParts, mainImagePart]
@@ -161,7 +158,7 @@ ${elements.map((el, index) => `- Element ${index + 1}: Referenced as ${el.name} 
         - **NEGATIVE PROMPTS (GEOMETRY):** DO NOT alter wall positions. DO NOT change angles. DO NOT add or remove rooms. DO NOT ignore the provided layout. The blueprint is a strict schematic, not a suggestion.
 
         **3. FORMAT THE OUTPUT IMAGE:**
-        - The final rendered image **MUST** have an aspect ratio of **${validAspectRatio}**. This is a mandatory, non-negotiable output format requirement.
+        - The final rendered image **MUST** be generated with an aspect ratio of **${validAspectRatio}**. This is a mandatory, non-negotiable output format requirement. Produce an image with these exact dimensions.
         
         ${elementsInstruction}
 
@@ -184,7 +181,7 @@ ${elements.map((el, index) => `- Element ${index + 1}: Referenced as ${el.name} 
     };
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         // The floor plan (planPart) MUST be the last image part for the model to use it as the base.
         contents: { parts: [textPart, ...elementParts, planPart] },
         config: {
@@ -333,7 +330,7 @@ The output must be a valid, well-formatted Python script string, at least 150 wo
 -   **Shadow Style:** Define the desired shadow type (e.g., # Shadows -- soft ambient occlusion, no harsh shadows).
 -   **Key Decor Principles:** Mention general decor elements (e.g., # Decor -- frequent use of potted plants, minimalist approach, etc.).
 
-The final output should be a single block of Python code text that acts as a comprehensive style guide.`
+The final output should be a single block of text that acts as a comprehensive style guide.`
     };
 
     const response = await ai.models.generateContent({
@@ -421,6 +418,48 @@ The final output should be a single block of text, ready to be used as a powerfu
     return response.text;
 };
 
+export const extractArchitecturalFeatures = async (images: {base64: string, mimeType: string}[], featureType: 'geometry' | 'material'): Promise<GenerateContentResponse> => {
+    const ai = getAiClient();
+    
+    let prompt;
+    if (featureType === 'geometry') {
+        prompt = `
+        **TASK:** Analyze the provided architectural images. 
+        **INSTRUCTION:** Extract the dominant geometric forms, structural lines, and core shapes from all images. Synthesize these elements into a single, abstract, black and white line drawing. 
+        **OUTPUT REQUIREMENTS:**
+        - The background MUST be pure white (#FFFFFF).
+        - All lines MUST be black (#000000).
+        - The result should be a clean, minimalist, abstract composition representing the shared architectural language of the inputs.
+        **NEGATIVE PROMPTS:** Do NOT include any color, shading, texture, perspective, 3D effects, or specific building representations. This is an abstract feature extraction, not a technical drawing.
+        `;
+    } else { // material
+        prompt = `
+        **TASK:** Analyze the provided architectural images.
+        **INSTRUCTION:** Identify the key materials and textures present (e.g., concrete texture, wood grain, fabric weave, metal sheen, stone patterns). 
+        **OUTPUT REQUIREMENTS:**
+        - Create a moodboard-style image that showcases these textures as a visually appealing collage or palette.
+        - Arrange the textures in clean geometric shapes (squares, rectangles).
+        - The overall image should feel like a professional material sample board.
+        **NEGATIVE PROMPTS:** Do NOT render a realistic scene or building. The output must be an abstract collage of textures and materials only.
+        `;
+    }
+
+    const imageParts = images.map(img => fileToGenerativePart(img.base64, img.mimeType));
+    const textPart = { text: prompt };
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+            parts: [textPart, ...imageParts]
+        },
+        config: {
+            responseModalities: [Modality.IMAGE, Modality.TEXT],
+        },
+    });
+
+    return response;
+};
+
 export const optimizePrompt = async (prompt: string, language: string): Promise<string> => {
     const ai = getAiClient();
     const instruction = `You are an expert in architectural and interior design visualization. Your task is to take a user's simple prompt and expand it into a detailed, professional prompt suitable for an AI image generator. The final output must be in the same language as the user's prompt (${language}).
@@ -497,8 +536,6 @@ export const generateImageFromText = async (prompt: string, aspectRatio: string,
         finalPrompt = `${prompt}, ultra high quality, 2k resolution, photorealistic, sharp focus, detailed`;
     }
     
-    // FIX: The aspectRatio was being passed as a translated string (e.g., "16:9 (Landscape)"). 
-    // The API expects a format like "16:9". This regex extracts the ratio part.
     const ratioMatch = aspectRatio.match(/(\d+:\d+)/);
     const validAspectRatio = ratioMatch ? ratioMatch[0] : '1:1';
 
@@ -526,7 +563,7 @@ export const removeImageBackground = async (base64: string, mimeType: string): P
     };
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         contents: { parts: [imagePart, textPart] },
         config: {
             responseModalities: [Modality.IMAGE, Modality.TEXT],
@@ -546,7 +583,7 @@ export const magicMixImage = async (
     const imagePart = fileToGenerativePart(compositeImage.base64, compositeImage.mimeType);
     
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         contents: { parts: [{text: prompt}, imagePart] },
         config: {
             responseModalities: [Modality.IMAGE, Modality.TEXT],
@@ -567,7 +604,7 @@ export const upscaleImageTo4K = async (base64: string, mimeType: string): Promis
     };
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
+        model: 'gemini-2.5-flash-image',
         contents: { parts: [imagePart, textPart] },
         config: {
             responseModalities: [Modality.IMAGE, Modality.TEXT],
@@ -603,12 +640,11 @@ export const optimizeVideoPrompt = async (prompt: string, language: string): Pro
     const ai = getAiClient();
     const instruction = `You are an expert in architectural visualization cinematography. Your task is to take a user's prompt and expand it into a detailed, professional prompt for the Veo video generation model. The output must be in the same language as the user's prompt (${language}).
 Focus on describing:
-1.  **Camera Movement:** Specify stable and cinematic movements like 'slow pan from left to right', 'gentle dolly zoom towards the main entrance', 'static architectural shot', 'smooth orbital shot around the building'. Avoid shaky or handheld descriptions.
-2.  **Lighting & Time:** Describe dynamic lighting changes, e.g., 'A time-lapse showing the transition from a warm golden hour sunset to a cool, moody twilight with interior lights turning on.'
-3.  **Environmental Animation:** Mention subtle animations that add realism, e.g., 'leaves on the trees rustling gently in the breeze', 'calm water in the pool rippling slightly', 'clouds drifting slowly across the sky'.
-4.  **Atmosphere:** Enhance the mood, e.g., 'serene and peaceful morning', 'dramatic and imposing on a stormy day'.
-The final output should be a single, cohesive paragraph of keywords and phrases, NOT a list, and it must be in ${language}.`;
-    
+1.  **Camera Movement:** Specify stable and cinematic movements like 'slow pan from left to right', 'gentle zoom in', 'smooth dolly forward', 'crane shot rising up', 'orbital shot around the building'. Avoid shaky or handheld descriptions.
+2.  **Scene Dynamics:** Describe what is happening in the scene. e.g., 'clouds moving in a timelapse', 'light changing from dawn to day', 'leaves rustling in the wind', 'cars driving by with light trails at night'.
+3.  **Visual Style:** Describe the overall aesthetic. e.g., 'cinematic, photorealistic, 8k resolution, high detail, sharp focus, dramatic lighting'.
+The final output should be a single, cohesive paragraph of keywords and phrases.`;
+
     const fullPrompt = `User prompt to optimize: "${prompt}"`;
 
     const response = await ai.models.generateContent({
@@ -621,7 +657,6 @@ The final output should be a single, cohesive paragraph of keywords and phrases,
     return response.text;
 };
 
-
 export const getBase64FromResponse = (response: GenerateContentResponse): string | null => {
     for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) {
@@ -629,4 +664,61 @@ export const getBase64FromResponse = (response: GenerateContentResponse): string
         }
     }
     return null;
+};
+
+export const getChatbotResponse = async (
+    prompt: string, 
+    image: { base64: string; mimeType: string } | null,
+    language: string
+): Promise<string> => {
+    const ai = getAiClient();
+    
+    const systemInstruction = `You are "Sudy", a friendly and knowledgeable AI assistant for an architectural design web app. Your goal is to understand the user's intent and guide them to the correct feature/tab, providing a clear explanation, a suggested prompt, and the name of the correct tab.
+
+**Workflow Logic (CRITICAL):**
+1.  **Sketch to Render:** If the user uploads a sketch, line drawing, or CAD drawing (e.g., from SketchUp, AutoCAD) and asks to render it or make it realistic, you **MUST** recommend they use the **'RenderAI'** tab. Instruct them to check the **'Render from line art'** option. Explain that this process gives them much greater creative control over the final style.
+2.  **Object Isolation/Extraction:** If the user uploads a photo and asks to isolate, extract, or keep only one object (e.g., "I just want the sofa", "remove everything but the chair"), you **MUST** recommend they use the **'Enhance'** tab. Instruct them to use the **Inpainting tool** by drawing a **single small dot** on the object they want to keep, and then use a prompt like "remove everything else except the object marked with a dot."
+
+**Available Tabs & their purpose:**
+- 'Enhance': For editing, inpainting (adding/removing objects), or changing parts of an existing image.
+- 'QuickGenerate': For creating new images from a text prompt only.
+- 'RenderAI': For re-imagining an existing image in a new style or context (e.g., changing a day scene to night). Best for sketches and 3D models.
+- 'FloorPlanRender': For creating a 3D perspective view from a 2D floor plan drawing.
+- 'ImageFromReference': For analyzing a style from multiple images and generating new images in that style.
+- 'VirtualTour': For creating an interactive step-by-step tour from a single image.
+
+**Response Language:** Your entire JSON output MUST be in the language specified: ${language}.
+
+**Output Format (Strict):**
+You MUST respond with a single, valid JSON object with NO markdown formatting. The JSON object must have these keys:
+- "explanation": (string) A friendly, conversational explanation of your recommendation.
+- "suggested_prompt": (string) A high-quality, detailed prompt for the user to use in the recommended tab.
+- "recommended_tab": (string) The exact name of the tab from the list above (e.g., 'Enhance', 'RenderAI').
+- "action_button_text": (string) A short, action-oriented text for the button, like "Go to Enhance & Edit" in the user's language.`;
+
+    const parts: any[] = [{ text: `User's request: "${prompt}"` }];
+    if (image) {
+        parts.push(fileToGenerativePart(image.base64, image.mimeType));
+    }
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts },
+        config: {
+            systemInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    explanation: { type: Type.STRING },
+                    suggested_prompt: { type: Type.STRING },
+                    recommended_tab: { type: Type.STRING },
+                    action_button_text: { type: Type.STRING },
+                },
+                required: ["explanation", "suggested_prompt", "recommended_tab", "action_button_text"]
+            }
+        },
+    });
+
+    return response.text;
 };

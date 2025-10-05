@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ImageResult } from '../types';
-import { DownloadIcon, ChevronLeftIcon, ChevronRightIcon, DocumentDuplicateIcon, ArrowPathIcon, MagnifyingGlassPlusIcon, MagnifyingGlassMinusIcon } from './icons';
+import { DownloadIcon, ChevronLeftIcon, ChevronRightIcon, DocumentDuplicateIcon, ArrowPathIcon, MagnifyingGlassPlusIcon, MagnifyingGlassMinusIcon, ChatBubbleOvalLeftEllipsisIcon, XMarkIcon } from './icons';
 import { nanoid } from 'nanoid';
 
 interface FullscreenViewProps {
@@ -10,6 +10,7 @@ interface FullscreenViewProps {
   onNext: () => void;
   onPrev: () => void;
   onSave: (newImage: ImageResult) => void;
+  onSendToChatbot: (image: ImageResult) => void;
 }
 
 const FilterSlider: React.FC<{label: string, value: number, onChange: (val: number) => void, min: number, max: number, unit: string}> = 
@@ -28,7 +29,7 @@ const FilterSlider: React.FC<{label: string, value: number, onChange: (val: numb
   </div>
 );
 
-const FullscreenView: React.FC<FullscreenViewProps> = ({ images, currentIndex, onClose, onNext, onPrev, onSave }) => {
+const FullscreenView: React.FC<FullscreenViewProps> = ({ images, currentIndex, onClose, onNext, onPrev, onSave, onSendToChatbot }) => {
   const currentImage = images[currentIndex];
   const imageRef = useRef<HTMLImageElement>(null);
   const panStartRef = useRef({ x: 0, y: 0 });
@@ -36,6 +37,7 @@ const FullscreenView: React.FC<FullscreenViewProps> = ({ images, currentIndex, o
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const [uiVisible, setUiVisible] = useState(true);
   
   const initialFilters = { brightness: 100, contrast: 100, saturate: 100, balance: 0 };
   const [filters, setFilters] = useState(initialFilters);
@@ -83,15 +85,14 @@ const FullscreenView: React.FC<FullscreenViewProps> = ({ images, currentIndex, o
   };
 
   const getFilterString = (f: typeof initialFilters) => {
-    // The original logic for cooling (sepia + hue-rotate) produced unnatural results.
-    // This new logic provides a more accurate color temperature shift.
     let balanceFilter = '';
-    if (f.balance > 0) { // Warm effect: Use sepia to add a yellow/brown tint.
-        const amount = f.balance / 100 * 0.6; 
+    if (f.balance > 0) { // Warm effect
+        const amount = f.balance / 100 * 0.5; 
         balanceFilter = `sepia(${amount})`;
-    } else if (f.balance < 0) { // Cool effect: Invert colors, apply sepia (which tints inverted warm tones to blue), then invert back.
-        const amount = Math.abs(f.balance) / 100 * 0.5;
-        balanceFilter = `invert(1) sepia(${amount}) invert(1)`;
+    } else if (f.balance < 0) { // Cool effect
+        const amount = Math.abs(f.balance) / 100;
+        // A common trick for a cooling filter is to use hue-rotate towards cyan/blue
+        balanceFilter = `hue-rotate(-${amount * 15}deg)`;
     }
     return `brightness(${f.brightness}%) contrast(${f.contrast}%) saturate(${f.saturate}%) ${balanceFilter}`.trim();
   };
@@ -123,20 +124,24 @@ const FullscreenView: React.FC<FullscreenViewProps> = ({ images, currentIndex, o
     onClose();
   };
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handlePanStart = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
     if (zoom <= 1) return;
     e.preventDefault();
     setIsPanning(true);
-    panStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    panStartRef.current = { x: clientX - pan.x, y: clientY - pan.y };
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handlePanMove = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
     if (!isPanning) return;
     e.preventDefault();
-    setPan({ x: e.clientX - panStartRef.current.x, y: e.clientY - panStartRef.current.y });
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    setPan({ x: clientX - panStartRef.current.x, y: clientY - panStartRef.current.y });
   };
   
-  const handleMouseUpOrLeave = () => setIsPanning(false);
+  const handlePanEnd = () => setIsPanning(false);
 
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -156,36 +161,40 @@ const FullscreenView: React.FC<FullscreenViewProps> = ({ images, currentIndex, o
     objectFit: 'contain'
   };
 
+  const uiContainerClass = `transition-opacity duration-300 ${uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`;
 
   return (
     <div 
       className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm"
-      onClick={onClose}
+      onClick={() => setUiVisible(prev => !prev)}
     >
-      <div className="absolute top-4 right-4 flex items-center space-x-4 z-10">
+      <div className={`absolute top-4 right-4 flex items-center space-x-4 z-10 ${uiContainerClass}`}>
         <button className="text-white hover:text-blue-400 transition-colors" title="Download Image" onClick={(e) => { e.stopPropagation(); handleDownload(); }}>
           <DownloadIcon className="w-8 h-8" />
         </button>
-        <button className="text-white text-5xl font-bold" onClick={onClose} title="Close">&times;</button>
+        <button className="text-white text-5xl font-bold" onClick={(e) => { e.stopPropagation(); onClose(); }} title="Close"><XMarkIcon className="w-8 h-8"/></button>
       </div>
 
       {images.length > 1 && (
-        <>
+        <div className={uiContainerClass}>
           <button className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 rounded-full hover:bg-white/30 text-white z-10" onClick={(e) => { e.stopPropagation(); onPrev(); }} title="Previous">
             <ChevronLeftIcon className="w-8 h-8"/>
           </button>
           <button className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 rounded-full hover:bg-white/30 text-white z-10" onClick={(e) => { e.stopPropagation(); onNext(); }} title="Next">
             <ChevronRightIcon className="w-8 h-8"/>
           </button>
-        </>
+        </div>
       )}
 
       <div 
         className="w-full h-full flex items-center justify-center p-16 overflow-hidden" 
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUpOrLeave}
-        onMouseLeave={handleMouseUpOrLeave}
+        onMouseDown={handlePanStart}
+        onMouseMove={handlePanMove}
+        onMouseUp={handlePanEnd}
+        onMouseLeave={handlePanEnd}
+        onTouchStart={handlePanStart}
+        onTouchMove={handlePanMove}
+        onTouchEnd={handlePanEnd}
         onWheel={handleWheel}
         onClick={(e) => e.stopPropagation()}
       >
@@ -196,17 +205,18 @@ const FullscreenView: React.FC<FullscreenViewProps> = ({ images, currentIndex, o
             alt="Fullscreen view" 
             style={imageStyle}
             draggable={false}
+            onClick={() => setUiVisible(prev => !prev)}
           />
         )}
       </div>
 
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-80 bg-gray-800/80 p-2 rounded-lg flex items-center space-x-3 text-white backdrop-blur-sm" onClick={e => e.stopPropagation()}>
+      <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 w-80 bg-gray-800/80 p-2 rounded-lg flex items-center space-x-3 text-white backdrop-blur-sm ${uiContainerClass}`} onClick={e => e.stopPropagation()}>
         <MagnifyingGlassMinusIcon className="w-5 h-5"/>
         <input type="range" min="1" max="5" step="0.1" value={zoom} onChange={e => setZoom(Number(e.target.value))} className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500"/>
         <MagnifyingGlassPlusIcon className="w-5 h-5"/>
       </div>
       
-      <div className="absolute top-1/2 -translate-y-1/2 right-4 w-64 bg-gray-800/80 p-4 rounded-lg space-y-4 text-white backdrop-blur-sm" onClick={e => e.stopPropagation()}>
+      <div className={`absolute top-1/2 -translate-y-1/2 right-4 w-64 bg-gray-800/80 p-4 rounded-lg space-y-4 text-white backdrop-blur-sm ${uiContainerClass}`} onClick={e => e.stopPropagation()}>
           <h3 className="font-bold text-lg border-b border-gray-600 pb-2">Image Details</h3>
           {imageInfo && (
             <div className="text-xs space-y-1 text-gray-300">
@@ -215,8 +225,11 @@ const FullscreenView: React.FC<FullscreenViewProps> = ({ images, currentIndex, o
                 <p><strong className="text-gray-100">Dimensions:</strong> {imageInfo.dimensions}</p>
             </div>
           )}
-          <h3 className="font-bold text-lg border-b border-gray-600 pb-2 pt-2">Adjustments</h3>
+          <h3 className="font-bold text-lg border-b border-gray-600 pb-2 pt-2">Actions & Adjustments</h3>
           <div className="space-y-3">
+            <button onClick={() => onSendToChatbot(currentImage)} className="w-full flex items-center justify-center gap-2 text-sm bg-blue-600 hover:bg-blue-500 rounded-md py-2 transition-colors">
+              <ChatBubbleOvalLeftEllipsisIcon className="w-5 h-5" /> Send to Chatbot
+            </button>
             <FilterSlider label="Brightness" value={filters.brightness} onChange={v => setFilters(f => ({...f, brightness: v}))} min={50} max={150} unit="%"/>
             <FilterSlider label="Contrast" value={filters.contrast} onChange={v => setFilters(f => ({...f, contrast: v}))} min={50} max={200} unit="%"/>
             <FilterSlider label="Saturation" value={filters.saturate} onChange={v => setFilters(f => ({...f, saturate: v}))} min={0} max={200} unit="%"/>

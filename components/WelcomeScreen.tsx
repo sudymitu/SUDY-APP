@@ -1,7 +1,7 @@
 import React from 'react';
 import { Tab } from '../types';
 import { useTranslation } from '../hooks/useTranslation';
-import { LockClosedIcon } from './icons';
+import { LockClosedIcon, VideoCameraIcon, SparklesIcon } from './icons';
 import { useActivation } from '../contexts/ActivationContext';
 
 interface WelcomeScreenProps {
@@ -131,6 +131,30 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ setActiveTab, TAB_ICONS }
                         />
                     </div>
                 ))}
+            </div>
+
+            <div className="text-center z-10 my-12 max-w-6xl w-full">
+                <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">{t('welcome.otherApps.title')}</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <a href="https://ai.studio/apps/drive/1fJgkdgReNo0-31zIE7LjgU8Z2qKQBoIT" target="_blank" rel="noopener noreferrer" className="block p-6 bg-gray-100 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-blue-500 transition-all">
+                        <div className="flex items-center justify-center gap-4">
+                            <VideoCameraIcon className="w-10 h-10 text-blue-500"/>
+                            <div>
+                                <h3 className="font-bold text-lg text-gray-900 dark:text-white">SUDY MASTER SCRIPT</h3>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t('welcome.otherApps.masterScript.desc')}</p>
+                            </div>
+                        </div>
+                    </a>
+                     <a href="https://ai.studio/apps/drive/1fvOVAddGw7G5ZdRFs_8cgTNbTD4wRsB1" target="_blank" rel="noopener noreferrer" className="block p-6 bg-gray-100 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-blue-500 transition-all">
+                        <div className="flex items-center justify-center gap-4">
+                            <SparklesIcon className="w-10 h-10 text-pink-500"/>
+                            <div>
+                                <h3 className="font-bold text-lg text-gray-900 dark:text-white">SUDY Magic Tools</h3>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t('welcome.otherApps.magicTools.desc')}</p>
+                            </div>
+                        </div>
+                    </a>
+                </div>
             </div>
         </div>
     );

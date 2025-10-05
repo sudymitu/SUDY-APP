@@ -31,7 +31,7 @@ const FloorPlanRenderTab: React.FC<FloorPlanRenderTabProps> = ({ state, setState
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const jsonInputRef = useRef<HTMLInputElement>(null);
+  const styleFileInputRef = useRef<HTMLInputElement>(null);
   const { t, language } = useTranslation();
   const { addMedia } = useImageLibrary();
   const { decrementQuota, forceQuotaDepletion } = useApiQuota();
@@ -174,39 +174,47 @@ const FloorPlanRenderTab: React.FC<FloorPlanRenderTabProps> = ({ state, setState
     }
   };
   
-  const handleLoadJsonClick = () => {
+  const handleLoadStyleFileClick = () => {
     if (!isActivated) {
       openActivationModal();
     } else {
-      jsonInputRef.current?.click();
+      styleFileInputRef.current?.click();
     }
   };
 
-  const handleJsonFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleStyleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
         const reader = new FileReader();
         reader.onload = (event) => {
             try {
                 const content = event.target?.result as string;
-                // The user now expects the entire file content to be the lora prompt
-                const parsedContent = JSON.parse(content);
-                setState({ ...state, loraStylePrompt: JSON.stringify(parsedContent, null, 2) });
+                const json = JSON.parse(content);
+                let promptToSet = '';
+                
+                // Check for new .lora format first
+                if (json.stylePrompt && typeof json.stylePrompt === 'string') {
+                    promptToSet = json.stylePrompt;
+                } 
+                // Fallback to old .json format for this tab
+                else if (json.trainedStylePrompt && typeof json.trainedStylePrompt === 'string') {
+                    promptToSet = json.trainedStylePrompt;
+                }
+                // Fallback for this tab's specific auto-analysis format
+                else if (json.style_mood) {
+                     promptToSet = JSON.stringify(json, null, 2);
+                }
+                else {
+                    setError(t('render.error.invalidJson'));
+                    return;
+                }
+
+                setState({ ...state, loraStylePrompt: promptToSet });
                 setError(null);
+
             } catch (err) {
-                 try {
-                    // Fallback for non-json prompts saved from other tabs
-                    const json = JSON.parse(event.target?.result as string);
-                    if (json.trainedStylePrompt && typeof json.trainedStylePrompt === 'string') {
-                        setState({ ...state, loraStylePrompt: json.trainedStylePrompt });
-                        setError(null);
-                    } else {
-                        throw new Error("Invalid format");
-                    }
-                 } catch(e) {
-                    setError(t('render.error.readJsonFailed'));
-                    console.error(err);
-                 }
+                setError(t('render.error.readJsonFailed'));
+                console.error(err);
             }
         };
         reader.readAsText(file);
@@ -319,15 +327,20 @@ const FloorPlanRenderTab: React.FC<FloorPlanRenderTabProps> = ({ state, setState
                 placeholder={t('render.lora.placeholder')}
                 className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-md p-2 h-64 resize-none font-mono text-xs"
             />
-            <div className="flex space-x-2 pt-2">
-                <input type="file" accept=".json" ref={jsonInputRef} onChange={handleJsonFileChange} className="hidden" />
-                <button onClick={handleLoadJsonClick} className={`w-full text-sm bg-gray-300/80 dark:bg-gray-700/80 text-gray-800 dark:text-white font-medium py-2 px-2 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2 ${!isActivated ? 'opacity-50 cursor-pointer' : ''}`} title={!isActivated ? t('tooltip.requiresActivation') : t('render.button.loadLora')}>
+            <div className="flex items-center gap-2 pt-2">
+                <input type="file" accept=".json,.lora" ref={styleFileInputRef} onChange={handleStyleFileChange} className="hidden" />
+                <button onClick={handleLoadStyleFileClick} className={`w-full text-sm bg-gray-300/80 dark:bg-gray-700/80 text-gray-800 dark:text-white font-medium py-2 px-2 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2 ${!isActivated ? 'opacity-50 cursor-pointer' : ''}`} title={!isActivated ? t('tooltip.requiresActivation') : t('training.button.loadStyleFile')}>
                     <FolderOpenIcon className="w-4 h-4" />
-                    <span>{t('render.button.loadLora')}</span>
+                    <span>{t('training.button.loadStyleFile')}</span>
                      {!isActivated && <LockClosedIcon className="w-3.5 h-3.5 ml-1" />}
                 </button>
-                 {state.loraStylePrompt && <p className="text-xs text-green-600 dark:text-green-400 px-1 pt-1 flex-grow text-right">{t('render.lora.loaded')}</p>}
+                {state.loraStylePrompt && (
+                    <button onClick={() => setState({...state, loraStylePrompt: ''})} className="p-2 bg-red-500/20 text-red-500 rounded-md hover:bg-red-500/40">
+                        <TrashIcon className="w-4 h-4" />
+                    </button>
+                )}
             </div>
+            {state.loraStylePrompt && <p className="text-xs text-green-600 dark:text-green-400 px-1 pt-1">{t('render.lora.loaded')}</p>}
           </div>
 
           <div>

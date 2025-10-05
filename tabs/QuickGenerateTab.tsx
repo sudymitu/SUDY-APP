@@ -28,7 +28,7 @@ const QuickGenerateTab: React.FC<QuickGenerateTabProps> = ({ state, setState, on
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<{ arch: string[], interior: string[] }>({ arch: [], interior: [] });
   
-  const jsonInputRef = useRef<HTMLInputElement>(null);
+  const styleFileInputRef = useRef<HTMLInputElement>(null);
   const { t, language } = useTranslation();
   const { addMedia } = useImageLibrary();
   const { remaining, decrementQuota, forceQuotaDepletion } = useApiQuota();
@@ -120,15 +120,15 @@ const QuickGenerateTab: React.FC<QuickGenerateTabProps> = ({ state, setState, on
       }
   };
   
-  const handleLoadJsonClick = () => {
+  const handleLoadStyleFileClick = () => {
     if (!isActivated) {
       openActivationModal();
     } else {
-      jsonInputRef.current?.click();
+      styleFileInputRef.current?.click();
     }
   };
 
-  const handleJsonFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleStyleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
         const reader = new FileReader();
@@ -136,7 +136,11 @@ const QuickGenerateTab: React.FC<QuickGenerateTabProps> = ({ state, setState, on
             try {
                 const content = event.target?.result as string;
                 const json = JSON.parse(content);
-                if (json.trainedStylePrompt && typeof json.trainedStylePrompt === 'string') {
+                // Check for new .lora format first, then fall back to old .json format
+                if (json.stylePrompt && typeof json.stylePrompt === 'string') {
+                    setState({ ...state, loraPrompt: json.stylePrompt });
+                    setError(null);
+                } else if (json.trainedStylePrompt && typeof json.trainedStylePrompt === 'string') {
                     setState({ ...state, loraPrompt: json.trainedStylePrompt });
                     setError(null);
                 } else {
@@ -232,16 +236,23 @@ const QuickGenerateTab: React.FC<QuickGenerateTabProps> = ({ state, setState, on
             <Slider label={t('render.options.resultCount')} min={1} max={6} step={1} value={state.numResults} onChange={(v) => setState({ ...state, numResults: v })} />
 
              <div>
-                <input type="file" accept=".json" ref={jsonInputRef} onChange={handleJsonFileChange} className="hidden" />
-                <button 
-                  onClick={handleLoadJsonClick}
-                  title={!isActivated ? t('tooltip.requiresActivation') : t('quickGenerate.button.loadLora')}
-                  className={`w-full text-sm bg-gray-300/80 dark:bg-gray-700/80 text-gray-800 dark:text-white font-medium py-2 px-2 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2 ${!isActivated ? 'opacity-50 cursor-pointer' : ''}`}
-                >
-                    <FolderOpenIcon className="w-4 h-4" />
-                    <span>{t('quickGenerate.button.loadLora')}</span>
-                    {!isActivated && <LockClosedIcon className="w-3 h-3 text-yellow-500 ml-1" />}
-                </button>
+                <input type="file" accept=".json,.lora" ref={styleFileInputRef} onChange={handleStyleFileChange} className="hidden" />
+                 <div className="flex items-center gap-2">
+                    <button 
+                      onClick={handleLoadStyleFileClick}
+                      title={!isActivated ? t('tooltip.requiresActivation') : t('training.button.loadStyleFile')}
+                      className={`w-full text-sm bg-gray-300/80 dark:bg-gray-700/80 text-gray-800 dark:text-white font-medium py-2 px-2 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2 ${!isActivated ? 'opacity-50 cursor-pointer' : ''}`}
+                    >
+                        <FolderOpenIcon className="w-4 h-4" />
+                        <span>{t('training.button.loadStyleFile')}</span>
+                        {!isActivated && <LockClosedIcon className="w-3 h-3 text-yellow-500 ml-1" />}
+                    </button>
+                    {state.loraPrompt && (
+                        <button onClick={() => setState({...state, loraPrompt: ''})} className="p-2 bg-red-500/20 text-red-500 rounded-md hover:bg-red-500/40">
+                            <TrashIcon className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
                 {state.loraPrompt && <p className="text-xs text-green-600 dark:text-green-400 px-1 pt-1">{t('render.lora.loaded')}</p>}
             </div>
             
