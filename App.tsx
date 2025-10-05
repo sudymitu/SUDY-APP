@@ -47,6 +47,7 @@ import Chatbot from './components/Chatbot';
 import { dataURLtoBase64, fileToDataURL, base64ToFile } from './utils/file';
 import FloatingDonateButton from './components/FloatingDonateButton';
 import LoginScreen from './components/LoginScreen';
+import { AVATAR_BASE64 } from './assets/avatar';
 
 
 const initialRenderAIState = {
@@ -231,7 +232,7 @@ const App: React.FC = () => {
   const [imageForChatbot, setImageForChatbot] = useState<File | null>(null);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-
+  const [user, setUser] = useState<{name: string, email: string, picture: string} | null>(null);
 
   const TAB_ICONS = getTabIcons(isActivated);
 
@@ -245,9 +246,14 @@ const App: React.FC = () => {
   });
   
   useEffect(() => {
-    const loggedIn = localStorage.getItem('sud_app_isLoggedIn') === 'true';
-    if (loggedIn) {
+    const loggedInStatus = localStorage.getItem('sud_app_isLoggedIn');
+    if (loggedInStatus === 'true') {
         setIsLoggedIn(true);
+        setUser({
+            name: 'Dien Duy',
+            email: 'dienduy.dev@example.com',
+            picture: AVATAR_BASE64,
+        });
     }
   }, []);
 
@@ -512,6 +518,17 @@ const App: React.FC = () => {
   const handleLoginSuccess = () => {
     localStorage.setItem('sud_app_isLoggedIn', 'true');
     setIsLoggedIn(true);
+    setUser({
+        name: 'Dien Duy',
+        email: 'dienduy.dev@example.com',
+        picture: AVATAR_BASE64,
+    });
+  };
+
+  const handleLogout = () => {
+      localStorage.removeItem('sud_app_isLoggedIn');
+      setIsLoggedIn(false);
+      setUser(null);
   };
 
   const renderContent = () => {
@@ -672,7 +689,9 @@ const App: React.FC = () => {
         
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
-            <Header 
+            <Header
+                user={user}
+                onLogout={handleLogout}
                 theme={theme} 
                 setTheme={setTheme} 
                 onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}

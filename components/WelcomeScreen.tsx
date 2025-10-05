@@ -42,7 +42,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ setActiveTab, TAB_ICONS, 
     const { isActivated, openActivationModal } = useActivation();
 
     const isLocked = (tab: Tab) => {
-        const lockedTabs = [Tab.Veo, Tab.FloorPlanColoring];
+        const lockedTabs = [Tab.Veo, Tab.FloorPlanColoring, Tab.Upscale4K];
         return lockedTabs.includes(tab) && !isActivated;
     };
 
