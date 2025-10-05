@@ -21,27 +21,6 @@ const fileToGenerativePart = (base64: string, mimeType: string) => {
   };
 };
 
-export const generateLineArtFromImage = async (base64: string, mimeType: string): Promise<GenerateContentResponse> => {
-    const ai = getAiClient();
-    const imagePart = fileToGenerativePart(base64, mimeType);
-    const textPart = { 
-        text: `
-        **Instruction:** Convert this architectural image into a clean, minimalist, black and white line drawing. The background must be pure white. Lines should be thin and precise.
-        **Output Requirements:** The final image must be a line drawing only.
-        **Negative Prompts (CRITICAL):** Do NOT include any of the following: perspective, 3D rendering, shading, shadows, gradients, colors, textures, materials, text, dimensions, annotations, people, or vegetation.
-        `
-    };
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [imagePart, textPart] },
-        config: {
-            responseModalities: [Modality.IMAGE, Modality.TEXT],
-        },
-    });
-    return response;
-};
-
 export const generateImageFromImageAndText = async (prompt: string, imageBase64: string, mimeType: string): Promise<GenerateContentResponse> => {
     const ai = getAiClient();
     const imagePart = fileToGenerativePart(imageBase64, mimeType);
@@ -676,7 +655,7 @@ export const getChatbotResponse = async (
     const systemInstruction = `You are "Sudy", a friendly and knowledgeable AI assistant for an architectural design web app. Your goal is to understand the user's intent and guide them to the correct feature/tab, providing a clear explanation, a suggested prompt, and the name of the correct tab.
 
 **Workflow Logic (CRITICAL):**
-1.  **Sketch to Render:** If the user uploads a sketch, line drawing, or CAD drawing (e.g., from SketchUp, AutoCAD) and asks to render it or make it realistic, you **MUST** recommend they use the **'RenderAI'** tab. Instruct them to check the **'Render from line art'** option. Explain that this process gives them much greater creative control over the final style.
+1.  **Sketch to Render:** If the user uploads a sketch, line drawing, or CAD drawing (e.g., from SketchUp, AutoCAD) and asks to render it or make it realistic, you **MUST** recommend they use the **'RenderAI'** tab. Explain that this process gives them much greater creative control over the final style.
 2.  **Object Isolation/Extraction:** If the user uploads a photo and asks to isolate, extract, or keep only one object (e.g., "I just want the sofa", "remove everything but the chair"), you **MUST** recommend they use the **'Enhance'** tab. Instruct them to use the **Inpainting tool** by drawing a **single small dot** on the object they want to keep, and then use a prompt like "remove everything else except the object marked with a dot."
 
 **Available Tabs & their purpose:**

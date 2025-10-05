@@ -6,7 +6,7 @@ import { SparklesIcon, LoadingSpinner, WandIcon, TrashIcon, FolderOpenIcon, Lock
 import { ASPECT_RATIO_KEYS } from '../constants';
 import { ImageResult as ImageResultType, EnhanceState, Tab } from '../types';
 import SideBySideComparison from '../components/SideBySideComparison';
-import { getBase64FromResponse, analyzeImageForRenderPrompt, generateImageFromImageAndText, generateLineArtFromImage, analyzeImageForStyle } from '../services/geminiService';
+import { getBase64FromResponse, analyzeImageForRenderPrompt, generateImageFromImageAndText, analyzeImageForStyle } from '../services/geminiService';
 import { nanoid } from 'nanoid';
 import { useTranslation } from '../hooks/useTranslation';
 import { useImageLibrary } from '../contexts/ImageLibraryContext';
@@ -108,12 +108,11 @@ const RenderTab: React.FC<RenderTabProps> = ({ initialState, state, setState, on
         mainImageFile: file, 
         mainImageUrl: dataUrl, 
         processedImageUrl: dataUrl,
-        lineArtImage: null,
         aspectRatio: 'aspect.original',
         adaptationMode: null,
       }));
     } else {
-      setState((prevState: any) => ({ ...prevState, mainImageFile: null, mainImageUrl: null, processedImageUrl: null, lineArtImage: null }));
+      setState((prevState: any) => ({ ...prevState, mainImageFile: null, mainImageUrl: null, processedImageUrl: null }));
       setImageDimensions(null);
     }
   }, [setState]);
@@ -213,18 +212,11 @@ const RenderTab: React.FC<RenderTabProps> = ({ initialState, state, setState, on
       try {
           const { base64, mimeType } = dataURLtoBase64(state.processedImageUrl);
           
-          const promptPromise = analyzeImageForRenderPrompt(base64, mimeType, state.prompt, language);
-          
-          const lineArtPromise = state.useLineArt 
-            ? generateLineArtFromImage(base64, mimeType).then(res => getBase64FromResponse(res))
-            : Promise.resolve(null);
-
-          const [masterPrompt, lineArtBase64] = await Promise.all([promptPromise, lineArtPromise]);
+          const masterPrompt = await analyzeImageForRenderPrompt(base64, mimeType, state.prompt, language);
           
           setState({
             ...state,
             prompt: masterPrompt,
-            lineArtImage: lineArtBase64 ? `data:image/jpeg;base64,${lineArtBase64}` : null,
           });
 
       } catch (e) {
@@ -271,16 +263,10 @@ const RenderTab: React.FC<RenderTabProps> = ({ initialState, state, setState, on
             setIsAnalyzing(false);
         }
 
-        let sourceImageInfo;
-        let imageSourceDescription;
-
-        if (state.useLineArt && state.lineArtImage) {
-            sourceImageInfo = dataURLtoBase64(state.lineArtImage);
-            imageSourceDescription = "Use the provided black and white line art image as the absolute structural blueprint for the scene.";
-        } else {
-            sourceImageInfo = dataURLtoBase64(state.processedImageUrl);
-            imageSourceDescription = "Use the provided full-color source image as the primary base for structure.";
-        }
+        const sourceImageInfo = dataURLtoBase64(state.processedImageUrl);
+        const imageSourceDescription = state.useLineArt
+            ? "Remove all lines from the provided source image. Preserve all textures, materials, and colors. The goal is to create a clean image without line art, but with the original surfaces intact."
+            : "Use the provided full-color source image as the primary base for structure.";
         
         const generationPromises = [];
         const randomPrompts = state.useRandomPrompts ? getPromptsForCategory(state.promptBankCategory) : [];
@@ -502,22 +488,6 @@ const RenderTab: React.FC<RenderTabProps> = ({ initialState, state, setState, on
                 />
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('render.options.useLineArt')}</span>
             </label>
-            {state.useLineArt && state.mainImageFile && (
-                 <button
-                    onClick={handleAnalyze}
-                    disabled={isAnalyzing}
-                    className="w-full text-xs bg-indigo-600/80 text-white font-bold py-1.5 px-3 rounded-md hover:bg-indigo-700 disabled:bg-gray-500 flex items-center justify-center space-x-2"
-                >
-                    {isAnalyzing ? <LoadingSpinner className="w-4 h-4" /> : <WandIcon className="w-4 h-4" />}
-                    <span>{isAnalyzing ? t('render.button.analyzing') : t('render.button.optimizePrompt')}</span>
-                </button>
-            )}
-            {state.useLineArt && state.lineArtImage && (
-                <div className="p-2 bg-gray-200 dark:bg-gray-900/50 rounded-md">
-                    <p className="text-xs font-semibold text-center mb-1">{t('render.lineArtPreview')}</p>
-                    <img src={state.lineArtImage} alt="Line art preview" className="w-full h-auto rounded"/>
-                </div>
-            )}
           </div>
           
           <Slider label={t('render.options.sharpnessAdherence')} min={0} max={10} step={1} value={state.sharpnessAdherence} onChange={(v) => setState({ ...state, sharpnessAdherence: v })} />

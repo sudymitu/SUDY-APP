@@ -46,6 +46,7 @@ import RenderTab from './tabs/RenderTab';
 import Chatbot from './components/Chatbot';
 import { dataURLtoBase64, fileToDataURL, base64ToFile } from './utils/file';
 import FloatingDonateButton from './components/FloatingDonateButton';
+import LoginScreen from './components/LoginScreen';
 
 
 const initialRenderAIState = {
@@ -60,7 +61,6 @@ const initialRenderAIState = {
   numResults: 1,
   results: [],
   useLineArt: false,
-  lineArtImage: null,
   sharpnessAdherence: 7,
   initialStateFromOtherTab: null,
   useRandomPrompts: false, // For new random prompt feature
@@ -230,6 +230,7 @@ const App: React.FC = () => {
   const { isActivated, openActivationModal } = useActivation();
   const [imageForChatbot, setImageForChatbot] = useState<File | null>(null);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
 
   const TAB_ICONS = getTabIcons(isActivated);
@@ -242,6 +243,13 @@ const App: React.FC = () => {
   const [theme, setThemeState] = useState<Theme>(() => {
     return (localStorage.getItem('theme') as Theme) || Theme.System;
   });
+  
+  useEffect(() => {
+    const loggedIn = localStorage.getItem('sud_app_isLoggedIn') === 'true';
+    if (loggedIn) {
+        setIsLoggedIn(true);
+    }
+  }, []);
 
   const setTheme = (newTheme: Theme) => {
     localStorage.setItem('theme', newTheme);
@@ -250,9 +258,10 @@ const App: React.FC = () => {
   
   // Welcome modal logic
   useEffect(() => {
+    if (!isLoggedIn) return;
     // Show welcome modal on every app load.
     setIsWelcomeModalOpen(true);
-  }, []);
+  }, [isLoggedIn]);
 
   // Feedback modal logic
   useEffect(() => {
@@ -344,7 +353,7 @@ const App: React.FC = () => {
   }, [theme]);
 
 
-  const TABS = [
+  const TABS_FOR_SIDEBAR = [
     Tab.QuickGenerate,
     Tab.Enhance,
     Tab.RenderAI,
@@ -355,6 +364,19 @@ const App: React.FC = () => {
     Tab.TechnicalDrawing,
     // Tab.Upscale4K, // Hidden in v2.5
     Tab.Veo,
+    Tab.ImageLibrary,
+  ];
+
+  const TABS_FOR_WELCOME = [
+    Tab.RenderAI,
+    Tab.QuickGenerate,
+    Tab.FloorPlanColoring,
+    Tab.Veo,
+    Tab.Enhance,
+    Tab.VirtualTour,
+    Tab.ImageFromReference,
+    Tab.FloorPlanRender,
+    Tab.TechnicalDrawing,
     Tab.ImageLibrary,
   ];
   
@@ -487,9 +509,14 @@ const App: React.FC = () => {
       }
   };
 
+  const handleLoginSuccess = () => {
+    localStorage.setItem('sud_app_isLoggedIn', 'true');
+    setIsLoggedIn(true);
+  };
+
   const renderContent = () => {
     if (activeTab === Tab.Welcome) {
-        return <WelcomeScreen setActiveTab={setActiveTab} TAB_ICONS={TAB_ICONS} />;
+        return <WelcomeScreen setActiveTab={setActiveTab} TAB_ICONS={TAB_ICONS} TABS_IN_ORDER={TABS_FOR_WELCOME} />;
     }
     switch (activeTab) {
       case Tab.Enhance:
@@ -596,6 +623,10 @@ const App: React.FC = () => {
     }
   };
 
+  if (!isLoggedIn) {
+    return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
     <div className="flex h-screen font-sans bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-hidden">
         {/* Sidebar */}
@@ -616,7 +647,7 @@ const App: React.FC = () => {
                     onClick={() => setActiveTab(Tab.Welcome)}
                 />
                 <div className="my-2 border-t border-gray-300 dark:border-gray-600"></div>
-                {TABS.map((tabKey) => (
+                {TABS_FOR_SIDEBAR.map((tabKey) => (
                     <TabButton
                     key={tabKey}
                     label={t(tabKey)}
